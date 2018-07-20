@@ -96,6 +96,12 @@ void HDF5File::flush()
   HDF5Interface::flush_file(_hdf5_file_id);
 }
 //-----------------------------------------------------------------------------
+std::string HDF5File::dataset_type(const std::string dataset_name)
+{
+  assert(_hdf5_file_id > 0);
+  return HDF5Interface::get_dataset_type(_hdf5_file_id, dataset_name);
+}
+//-----------------------------------------------------------------------------
 void HDF5File::write(const std::vector<geometry::Point>& points,
                      const std::string dataset_name)
 {

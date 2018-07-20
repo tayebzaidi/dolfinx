@@ -54,17 +54,17 @@ class HDF5File:
         else:
             self._cpp_object.write(o_cpp, name, t)
 
-    def read_mvc(self, mesh, name: str = ""):
-        # FIXME: figure type out from file (or pass string)  and return?
-        raise NotImplementedError("General MVC read function not implemented.")
-
-    # def read_mvc(self, mesh, type: str, name: str = ""):
-    #     # FIXME: return appropriate MVC based on type string
-    #     raise NotImplementedError("General MVC read function not implemented.")
-
     # ----------------------------------------------------------
 
-    # FIXME: implement a common function for multiple types
+    def read_mvc(self, mesh, name: str):
+        """Read MeshValueCollection"""
+        value_type = self._cpp_object.dataset_type(name + "/values")
+        value_reader = {'float64': self._cpp_object.read_mvc_double,
+                        'uint64': self._cpp_object.read_mvc_size_t}
+        try:
+            return value_reader[value_type](mesh, name)
+        except:
+            raise TypeError('Cannot read MeshValueCollection of type %s' % value_type)
 
     def read_mvc_size_t(self, mesh, name: str = ""):
         """Read MeshValueCollection of type size_t"""

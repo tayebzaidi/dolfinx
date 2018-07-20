@@ -65,6 +65,9 @@ public:
   /// Flush buffered I/O to disk
   void flush();
 
+  /// Get the datatype of a dataset (uint32, uint64, int32, int64, float32, float64)
+  std::string dataset_type(const std::string dataset_name);
+
   /// Write points to file
   void write(const std::vector<geometry::Point>& points,
              const std::string name);

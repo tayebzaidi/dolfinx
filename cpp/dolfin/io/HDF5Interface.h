@@ -93,6 +93,10 @@ public:
   get_dataset_shape(const hid_t hdf5_file_handle,
                     const std::string dataset_path);
 
+  /// Get type of data (int32, uint32, int64, uint64, float32, float64)
+  static std::string get_dataset_type(const hid_t hdf5_file_handle,
+                                      const std::string dataset_name);
+
   /// Return list all datasets in named group of file
   static std::vector<std::string> dataset_list(const hid_t hdf5_file_handle,
                                                const std::string group_name);
@@ -654,5 +658,5 @@ inline void HDF5Interface::get_attribute_value(const hid_t attr_type,
 }
 //---------------------------------------------------------------------------
 #endif
-}
-}
+} // namespace io
+} // namespace dolfin

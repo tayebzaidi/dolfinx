@@ -51,6 +51,7 @@ def test_save_and_read_vector(tempdir):
     with HDF5File(MPI.comm_world, filename, "w") as vector_file:
         vector_file.write(x, "/my_vector")
 
+
     # Read from file
     with HDF5File(MPI.comm_world, filename, "r") as vector_file:
         y = vector_file.read_vector(MPI.comm_world, "/my_vector", False)
@@ -141,7 +142,7 @@ def test_save_and_read_mesh_value_collection(tempdir):
     # read from file
     with HDF5File(mesh.mpi_comm(), filename, 'r') as f:
         for dim in range(mesh.topology.dim):
-            mvc = f.read_mvc_size_t(mesh, "/mesh_value_collection_{}".format(dim))
+            mvc = f.read_mvc(mesh, "/mesh_value_collection_{}".format(dim))
             # check the values
             for (cell, lidx), val in mvc.values().items():
                 eidx = Cell(mesh, cell).entities(dim)[lidx]
@@ -166,7 +167,7 @@ def test_save_and_read_mesh_value_collection_with_only_one_marked_entity(tempdir
 
     # read from file
     with HDF5File(mesh.mpi_comm(), filename, 'r') as f:
-        mvc = f.read_mvc_size_t(mesh, "/mesh_value_collection")
+        mvc = f.read_mvc(mesh, "/mesh_value_collection")
         assert MPI.sum(mesh.mpi_comm(), mvc.size()) == 1
         if MPI.rank(mesh.mpi_comm()) == 0:
             assert mvc.get_value(0, 0) == 1

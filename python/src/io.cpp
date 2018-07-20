@@ -40,6 +40,7 @@ void io(py::module& m)
            py::arg("comm"), py::arg("filename"), py::arg("file_mode"))
       .def("close", &dolfin::io::HDF5File::close)
       .def("flush", &dolfin::io::HDF5File::flush)
+      .def("dataset_type", &dolfin::io::HDF5File::dataset_type)
       // read
       .def("read_mesh",
            [](dolfin::io::HDF5File& self, const MPICommWrapper comm,
@@ -238,8 +239,7 @@ void io(py::module& m)
              auto _points = points.cast<std::vector<dolfin::geometry::Point>>();
              instance.write(_points, values, encoding);
            },
-           py::arg("points"), py::arg("values"),
-           py::arg("encoding"))
+           py::arg("points"), py::arg("values"), py::arg("encoding"))
       // Check points
       .def("write_checkpoint",
            [](dolfin::io::XDMFFile& instance,

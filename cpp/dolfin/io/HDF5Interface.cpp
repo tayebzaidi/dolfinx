@@ -396,6 +396,56 @@ HDF5Interface::get_dataset_shape(const hid_t hdf5_file_handle,
   return std::vector<std::int64_t>(size.begin(), size.end());
 }
 //-----------------------------------------------------------------------------
+std::string HDF5Interface::get_dataset_type(const hid_t hdf5_file_handle,
+                                            const std::string dataset_name)
+{
+  // Open named dataset
+  const hid_t dset_id
+      = H5Dopen2(hdf5_file_handle, dataset_name.c_str(), H5P_DEFAULT);
+  if (dset_id < 0)
+    throw std::runtime_error("Failed to open HDF5 dataset by name");
+
+  hid_t dset_type = H5Dget_type(dset_id);
+
+  // Determine type of dataset
+  const hid_t h5class = H5Tget_class(dset_type);
+  if (h5class < 0)
+    throw std::runtime_error("Failed to get HDF5 dataset type.");
+
+  // Check for size (8/16/32/64 etc.)
+  const std::size_t h5size = 8 * H5Tget_size(dset_type);
+  if (h5size == 0)
+    throw std::runtime_error("Failed to get HDF5 dataset type size.");
+
+  std::string type_description;
+
+  if (h5class == H5T_INTEGER)
+  {
+    H5T_sign_t h5signed = H5Tget_sign(dset_type);
+    if (h5signed < 0)
+      throw std::runtime_error("Failed to get HDF5 dataset type sign.");
+
+    if (h5signed == H5T_SGN_NONE)
+      type_description = "uint" + std::to_string(h5size);
+    else
+      type_description = "int" + std::to_string(h5size);
+  }
+  else if (h5class == H5T_FLOAT)
+    type_description = "float" + std::to_string(h5size);
+  else
+    type_description = "unknown";
+
+  // Close attribute type
+  if (H5Tclose(dset_type) < 0)
+    throw std::runtime_error("Call to H5Tclose unsuccessful");
+
+  // Close dataset
+  if (H5Dclose(dset_id) < 0)
+    throw std::runtime_error("Call to H5Dclose unsuccessful");
+
+  return type_description;
+}
+//-----------------------------------------------------------------------------
 int HDF5Interface::num_datasets_in_group(const hid_t hdf5_file_handle,
                                          const std::string group_name)
 {
