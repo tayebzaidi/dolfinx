@@ -59,22 +59,26 @@ class HDF5File:
     def read_mvc(self, mesh, name: str):
         """Read MeshValueCollection"""
         value_type = self._cpp_object.dataset_type(name + "/values")
-        value_reader = {'float64': self._cpp_object.read_mvc_double,
-                        'uint64': self._cpp_object.read_mvc_size_t}
+        reader = {'float64': self._cpp_object.read_mvc_double,
+                  'int32': self._cpp_object.read_mvc_bool,
+                  'uint64': self._cpp_object.read_mvc_size_t}
         try:
-            return value_reader[value_type](mesh, name)
+            return reader[value_type](mesh, name)
         except:
             raise TypeError('Cannot read MeshValueCollection of type %s' % value_type)
 
-    def read_mvc_size_t(self, mesh, name: str = ""):
-        """Read MeshValueCollection of type size_t"""
-        return self._cpp_object.read_mvc_size_t(mesh, name)
+    def read_mf(self, mesh, name: str):
+        """Read MeshFunction"""
+        value_type = self._cpp_object.dataset_type(name + "/values")
+        reader = {'float64': self._cpp_object.read_mf_double,
+                  'int32': self._cpp_object.read_mf_int,
+                  'uint64': self._cpp_object.read_mf_size_t}
+        try:
+            return reader[value_type](mesh, name)
+        except:
+            raise TypeError('Cannot read MeshFunction of type %s' % value_type)
 
-    def read_mf_double(self, mesh, name: str = ""):
-        """Read MeshFunction of type float"""
-        return self._cpp_object.read_mf_double(mesh, name)
-
-    # ----------------------------------------------------------
+    # ------------------------------------------------------------
 
     def read_vector(self, mpi_comm, data_path: str,
                     use_partition_from_file: bool):
