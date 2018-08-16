@@ -122,7 +122,7 @@ class XDMFFile:
     # Import encoding (find better way?)
     Encoding = cpp.io.XDMFFile.Encoding
 
-    def __init__(self, mpi_comm, filename: str):
+    def __init__(self, mpi_comm, filename: str, encoding=Encoding.HDF5):
         """Open XDMF file
 
         Parameters
@@ -131,9 +131,11 @@ class XDMFFile:
             The MPI communicator
         filename
             Name of the file
+        encoding
+            Encoding used for 'heavy' data when writing/appending
 
         """
-        self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename)
+        self._cpp_object = cpp.io.XDMFFile(mpi_comm, filename, encoding)
 
     def __enter__(self):
         return self
@@ -145,7 +147,7 @@ class XDMFFile:
         """Close file"""
         self._cpp_object.close()
 
-    def write(self, o, t=None, encoding=Encoding.HDF5) -> None:
+    def write(self, o, t=None) -> None:
         """Write object to file
 
         Parameters
@@ -154,15 +156,13 @@ class XDMFFile:
             The object to write to file
         t
             The time stamp
-        encoding
-            File encoding for 'heavy' data
 
         """
         o_cpp = getattr(o, "_cpp_object", o)
         if t is None:
-            self._cpp_object.write(o_cpp, encoding)
+            self._cpp_object.write(o_cpp)
         else:
-            self._cpp_object.write(o_cpp, t, encoding)
+            self._cpp_object.write(o_cpp, t)
 
     # ----------------------------------------------------------
 
@@ -232,11 +232,10 @@ class XDMFFile:
     def write_checkpoint(self,
                          u,
                          name: str,
-                         time_step: float = 0.0,
-                         encoding=Encoding.HDF5) -> None:
+                         time_step: float = 0.0) -> None:
         """Write finite element Function in checkpointing format
 
         """
 
         o_cpp = getattr(u, "_cpp_object", u)
-        self._cpp_object.write_checkpoint(o_cpp, name, time_step, encoding)
+        self._cpp_object.write_checkpoint(o_cpp, name, time_step)
