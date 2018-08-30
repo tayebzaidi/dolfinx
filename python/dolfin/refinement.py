@@ -7,6 +7,7 @@
 """Refinement module for Mesh refinement"""
 
 import dolfin.cpp as cpp
+import dolfin.fem
 
 
 def refine(mesh, markers=None, redistribute=True):
