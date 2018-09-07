@@ -19,6 +19,7 @@ set(HEADERS
   MeshQuality.h
   MeshTopology.h
   MeshValueCollection.h
+  MeshView.h
   PartitionData.h
   PeriodicBoundaryComputation.h
   PointCell.h
@@ -47,6 +48,7 @@ set(SOURCES
   MeshPartitioning.cpp
   MeshQuality.cpp
   MeshTopology.cpp
+  MeshView.cpp
   PartitionData.cpp
   PeriodicBoundaryComputation.cpp
   PointCell.cpp
