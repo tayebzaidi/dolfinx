@@ -24,6 +24,7 @@
 #include <dolfin/mesh/MeshQuality.h>
 #include <dolfin/mesh/MeshTopology.h>
 #include <dolfin/mesh/MeshValueCollection.h>
+#include <dolfin/mesh/MeshView.h>
 #include <dolfin/mesh/PeriodicBoundaryComputation.h>
 #include <dolfin/mesh/SubDomain.h>
 #include <dolfin/mesh/Vertex.h>
@@ -469,6 +470,10 @@ void mesh(py::module& m)
       PYBIND11_OVERLOAD(void, dolfin::mesh::SubDomain, map, x, y);
     }
   };
+
+  // dolfin::mesh::MeshView
+  py::class_<dolfin::mesh::MeshView>(m, "MeshView", "DOLFIN MeshView")
+      .def("create", &dolfin::mesh::MeshView::create);
 
   // dolfin::mesh::SubDomain
   py::class_<dolfin::mesh::SubDomain, std::shared_ptr<dolfin::mesh::SubDomain>,

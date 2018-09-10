@@ -42,7 +42,9 @@ Mesh MeshView::create(const MeshFunction<std::size_t>& marker, std::size_t tag)
   }
 
   // Create a new Mesh of dimension tdim
-  std::size_t num_cell_vertices = mesh->type().num_vertices(tdim);
+  std::unique_ptr<CellType> entity_type(
+      CellType::create(mesh->type().entity_type(tdim)));
+  std::size_t num_cell_vertices = entity_type->num_vertices();
 
   // Reverse mapping from full Mesh for vertices
   std::map<std::size_t, std::size_t> vertex_rev_map;
@@ -72,6 +74,12 @@ Mesh MeshView::create(const MeshFunction<std::size_t>& marker, std::size_t tag)
       new_cells(i, j) = mapit.first->second;
     }
   }
+
+  // Generate some global indices for new cells
+  const std::size_t cell_offset
+      = MPI::global_offset(mesh->mpi_comm(), indices.size(), true);
+  std::vector<std::int64_t> new_cell_indices(indices.size());
+  std::iota(new_cell_indices.begin(), new_cell_indices.end(), cell_offset);
 
   // Initialise vertex global indices in new_mesh
   const std::size_t mpi_size = MPI::size(mesh->mpi_comm());
@@ -156,14 +164,13 @@ Mesh MeshView::create(const MeshFunction<std::size_t>& marker, std::size_t tag)
 
   // All shared vertices are now numbered
 
-  // Add geometry and close new_mesh
+  // Add geometry and create new_mesh
   EigenRowArrayXXd new_points(vertex_fwd_map.size(), mesh->geometry().dim());
-
   for (unsigned int i = 0; i != vertex_fwd_map.size(); ++i)
     new_points.row(i) = mesh->geometry().x(vertex_fwd_map[i]);
 
-  Mesh new_mesh(mesh->mpi_comm(), mesh->type().cell_type(), new_points,
-                new_cells, {}, mesh::GhostMode::none, 0);
+  Mesh new_mesh(mesh->mpi_comm(), entity_type->cell_type(), new_points,
+                new_cells, new_cell_indices, mesh::GhostMode::none, 0);
 
   auto& new_shared_0 = new_mesh.topology().shared_entities(0);
   new_shared_0.insert(new_shared.begin(), new_shared.end());
@@ -205,14 +212,6 @@ Mesh MeshView::create(const MeshFunction<std::size_t>& marker, std::size_t tag)
   }
 
   MeshTopology& new_topo = new_mesh.topology();
-
-  // Generate some global indices for cells
-  // FIXME: some cells may be shared if ghosts are used
-  const std::size_t cell_offset
-      = MPI::global_offset(mesh->mpi_comm(), indices.size(), true);
-  new_topo.init_global_indices(tdim, indices.size());
-  for (std::size_t i = 0; i != indices.size(); ++i)
-    new_topo.set_global_index(tdim, i, i + cell_offset);
 
   // Set global vertex indices
   new_topo.init_global_indices(0, vertex_num);
