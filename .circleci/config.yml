@@ -3,7 +3,7 @@ install-dependencies: &install-dependencies
   command: |
             apt-get -qq update
             apt-get -y install libfreetype6-dev
-            pip3 -q install cffi decorator flake8 matplotlib numba pygmsh pytest pytest-xdist sphinx sphinx_rtd_theme --upgrade
+            pip3 -q install cffi decorator flake8 matplotlib numba pygmsh pytest pytest-xdist sphinx sphinx_rtd_theme coverage coveralls --upgrade
 
 install-python-components: &install-python-components
   name: Install FEniCS Python components
@@ -79,7 +79,8 @@ unit-tests-python: &unit-tests-python
   name: Run unit tests (Python, serial)
   command: |
     cd python/test/unit
-    python3 -m pytest -n 3 .
+    coverage run -m pytest -n 3 .
+    coveralls
 
 unit-tests-python-mpi: &unit-tests-python-mpi
   name: Run unit tests (Python, MPI)
