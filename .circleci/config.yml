@@ -78,8 +78,8 @@ build-documentation-python: &build-documentation-python
 unit-tests-python: &unit-tests-python
   name: Run unit tests (Python, serial)
   command: |
-    cd python
-    coverage run --source dolfin -m pytest -n 3 test/unit
+    cd python/test
+    coverage run --source ../dolfin -m pytest -n 3 unit
     coveralls
 
 unit-tests-python-mpi: &unit-tests-python-mpi
