@@ -53,6 +53,9 @@ demos-cpp: &demos-cpp
     cmake -G Ninja .
     ninja
     ./demo_poisson
+    ls -l
+    lcov --directory . --capture --output-file all.info
+    ls -l
 
 demos-cpp-complex: &demos-cpp-complex
   name: Build and run demos (C++)
