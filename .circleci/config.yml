@@ -27,7 +27,7 @@ build-documentation-cpp: &build-documentation-cpp
 
 configure-cpp: &configure-cpp
   name: Configure (C++)
-  command: mkdir -p build && cd build && cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer ../cpp/
+  command: mkdir -p build && cd build && cmake -G Ninja -DCMAKE_BUILD_TYPE=Developer -DDOLFIN_ENABLE_CODE_COVERAGE=1 ../cpp/
 
 build-install-cpp: &build-install-cpp
   name: Build and install (C++)
