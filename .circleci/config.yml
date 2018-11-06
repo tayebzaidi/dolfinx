@@ -2,7 +2,7 @@ install-dependencies: &install-dependencies
   name: Install/update (test/doc) dependencies
   command: |
             apt-get -qq update
-            apt-get -y install libfreetype6-dev
+            apt-get -y install libfreetype6-dev lcov
             pip3 -q install cffi decorator flake8 matplotlib numba pygmsh pytest pytest-xdist sphinx sphinx_rtd_theme pytest-cov coverage coveralls --upgrade
 
 install-python-components: &install-python-components
