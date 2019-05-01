@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <petsc.h>
+#include <vector>
 
 #ifdef HAS_SLEPC
 #include <slepc.h>
@@ -71,10 +72,23 @@ int SubSystemsManager::init_mpi(int argc, char* argv[],
   return provided;
 }
 //-----------------------------------------------------------------------------
-void SubSystemsManager::init_logging(int argc, char* argv[])
+void SubSystemsManager::init_logging(int argc, char* argv_in[])
 {
   loguru::g_stderr_verbosity = loguru::Verbosity_WARNING;
-  loguru::init(argc, argv, "-loglevel");
+
+  // Copy argv, because loguru will otherwise alter it.
+  std::vector<char*> argvptr(argc + 1, nullptr);
+  std::vector<std::string> args(argc);
+  for (int i = 0; i < argc; ++i)
+  {
+    if (argv_in)
+    {
+      args[i] = std::string(argv_in[i]);
+      argvptr[i] = const_cast<char*>(args[i].data());
+    }
+  }
+
+  loguru::init(argc, argvptr.data(), "-loglevel");
 }
 //-----------------------------------------------------------------------------
 void SubSystemsManager::init_petsc()
@@ -151,7 +165,8 @@ void SubSystemsManager::finalize_mpi()
       MPI_Finalize();
     else
     {
-      // Use std::cout since log system may fail because MPI has been shut down.
+      // Use std::cout since log system may fail because MPI has been shut
+      // down.
       std::cout << "DOLFIN is responsible for MPI, but it has been finalized "
                    "elsewhere prematurely."
                 << std::endl;
