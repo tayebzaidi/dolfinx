@@ -81,7 +81,7 @@ void SubSystemsManager::init_logging(int argc, char* argv_in[])
   std::vector<std::string> args(argc);
   for (int i = 0; i < argc; ++i)
   {
-    if (argv_in)
+    if (argv_in[i])
     {
       args[i] = std::string(argv_in[i]);
       argvptr[i] = const_cast<char*>(args[i].data());
