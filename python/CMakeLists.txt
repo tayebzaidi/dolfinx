@@ -33,6 +33,9 @@ pybind11_add_module(cpp SHARED
   src/refinement.cpp
   src/MPICommWrapper.cpp)
 
+# Add local header files
+target_include_directories(cpp PRIVATE "dolfin/include")
+
 # Add DOLFIN libraries and other config
 target_link_libraries(cpp PRIVATE pybind11::module dolfin)
 

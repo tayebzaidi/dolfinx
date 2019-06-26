@@ -6,6 +6,7 @@ import subprocess
 import sys
 from distutils.version import LooseVersion
 
+
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
@@ -26,8 +27,8 @@ REQUIREMENTS = [
 
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=''):
-        Extension.__init__(self, name, sources=[])
+    def __init__(self, name, sourcedir='', **kwargs):
+        Extension.__init__(self, name, sources=[], **kwargs)
         self.sourcedir = os.path.abspath(sourcedir)
 
 
@@ -90,6 +91,7 @@ setup(name='fenics-dolfin',
                 "dolfin.la",
                 "dolfin_utils.test"],
       ext_modules=[CMakeExtension('dolfin.cpp')],
+      package_data={'dolfin': ['include/*.h']},
       cmdclass=dict(build_ext=CMakeBuild),
       install_requires=REQUIREMENTS,
       zip_safe=False)
