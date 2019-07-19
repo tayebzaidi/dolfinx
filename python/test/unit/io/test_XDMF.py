@@ -530,6 +530,7 @@ def test_save_points_2D(tempdir, encoding):
         points.append(v.point())
         values.append(numpy.linalg.norm(v.point()))
     vals = numpy.array(values)
+    points = numpy.array(points)
 
     with XDMFFile(
             mesh.mpi_comm(),
@@ -552,6 +553,7 @@ def test_save_points_3D(tempdir, encoding):
         points.append(v.point())
         values.append(numpy.linalg.norm(v.point()))
     vals = numpy.array(values)
+    points = numpy.array(points)
 
     with XDMFFile(
             mesh.mpi_comm(),
