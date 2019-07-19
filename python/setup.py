@@ -121,7 +121,7 @@ def parallelCompile(self, sources, output_dir=None, macros=None, include_dirs=No
     return objects
 
 
-distutils.ccompiler.CCompiler.compile = parallelCompile
+# distutils.ccompiler.CCompiler.compile = parallelCompile
 
 
 class BuildExt(build_ext):
