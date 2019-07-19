@@ -1,13 +1,14 @@
-import multiprocessing
+
+import glob
+import pybind11
+import petsc4py
+import mpi4py
 import os
-import platform
-import re
 import subprocess
 import sys
-from distutils.version import LooseVersion
-
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
+import distutils.ccompiler
 
 if sys.version_info < (3, 5):
     print("Python 3.5 or higher required, please upgrade.")
@@ -25,58 +26,113 @@ REQUIREMENTS = [
 ]
 
 
-class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=''):
-        Extension.__init__(self, name, sources=[])
-        self.sourcedir = os.path.abspath(sourcedir)
+def _pkgconfig_query(s):
+    pkg_config_exe = os.environ.get('PKG_CONFIG', None) or 'pkg-config'
+    cmd = [pkg_config_exe] + s.split()
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+    rc = proc.returncode
+    return (rc, out.rstrip().decode('utf-8'))
 
 
-class CMakeBuild(build_ext):
-    def run(self):
+def exists(package):
+    "Test for the existence of a pkg-config file for a named package"
+    return (_pkgconfig_query("--exists " + package)[0] == 0)
+
+
+def parse(package):
+    "Return a dict containing compile-time definitions"
+    parse_map = {
+        '-D': 'define_macros',
+        '-I': 'include_dirs',
+        '-L': 'library_dirs',
+        '-l': 'libraries'
+    }
+
+    result = {x: [] for x in parse_map.values()}
+
+    # Execute the query to pkg-config and clean the result.
+    out = _pkgconfig_query(package + ' --cflags --libs')[1]
+    out = out.replace('\\"', '')
+
+    # Iterate through each token in the output.
+    for token in out.split():
+        key = parse_map.get(token[:2])
+        if key:
+            t = token[2:].strip()
+            result[key].append(t)
+
+    return result
+
+
+if (exists('dolfin')):
+    dolfin_pkg = parse('dolfin')
+else:
+    raise Exception("Can't find libdolfin pkgconfig")
+
+includes = dolfin_pkg['include_dirs']
+includes += [pybind11.get_include()]
+includes += [mpi4py.get_include()]
+includes += [petsc4py.get_include()]
+
+libdirs = dolfin_pkg['library_dirs']
+libraries = dolfin_pkg['libraries']
+
+defines = dolfin_pkg['define_macros']
+defines = [tuple(d.split("=")) for d in defines]
+for i, d in enumerate(defines):
+    if len(d) == 1:
+        defines[i] = (d[0], '1')
+    elif "." in d[1]:
+        defines[i] = (d[0], '\"' + d[1] + '\"')
+
+cpp_files = glob.glob("src/*.cpp")
+
+ext_modules = [Extension('dolfin.cpp',
+                         cpp_files,
+                         define_macros=defines,
+                         include_dirs=includes,
+                         library_dirs=libdirs,
+                         libraries=libraries,
+                         language='c++')]
+
+
+def parallelCompile(self, sources, output_dir=None, macros=None, include_dirs=None, debug=0,
+                    extra_preargs=None, extra_postargs=None, depends=None):
+    macros, objects, extra_postargs, pp_opts, build = self._setup_compile(output_dir, macros, include_dirs,
+                                                                          sources, depends, extra_postargs)
+    cc_args = self._get_cc_args(pp_opts, debug, extra_preargs)
+
+    import multiprocessing
+    import multiprocessing.pool
+    # Use half of processor count (probably best, in case of hyperthreading)
+    N = multiprocessing.cpu_count() // 2
+
+    def _single_compile(obj):
         try:
-            out = subprocess.check_output(['cmake', '--version'])
-        except OSError:
-            raise RuntimeError("CMake must be installed to build the following extensions: "
-                               + ", ".join(e.name for e in self.extensions))
+            src, ext = build[obj]
+        except KeyError:
+            return
+        self._compile(obj, src, ext, cc_args, extra_postargs, pp_opts)
 
-        if platform.system() == "Windows":
-            cmake_version = LooseVersion(re.search(r'version\s*([\d.]+)', out.decode()).group(1))
-            if cmake_version < '3.1.0':
-                raise RuntimeError("CMake >= 3.1.0 is required on Windows")
+    # convert to list, imap is evaluated on-demand
+    list(multiprocessing.pool.ThreadPool(N).imap(_single_compile, objects))
+    return objects
 
+
+distutils.ccompiler.CCompiler.compile = parallelCompile
+
+
+class BuildExt(build_ext):
+
+    def build_extensions(self, *args, **kwargs):
+        opts = ['-std=c++14', '-g0']
+        link_opts = ['-Wl,-rpath,' + ldir for ldir in libdirs]
         for ext in self.extensions:
-            self.build_extension(ext)
-
-    def build_extension(self, ext):
-        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-                      '-DPYTHON_EXECUTABLE=' + sys.executable]
-
-        cfg = 'Debug' if self.debug else 'Release'
-        build_args = ['--config', cfg]
-
-        if platform.system() == "Windows":
-            cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
-            if sys.maxsize > 2**32:
-                cmake_args += ['-A', 'x64']
-            build_args += ['--', '/m']
-        else:
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-            if "CI" in os.environ:
-                build_args += ['--', '-j3']
-            elif "CIRCLECI" in os.environ:
-                build_args += ['--', '-j3']
-            else:
-                num_build_threads = max(1, multiprocessing.cpu_count() - 1)
-                build_args += ['--', '-j' + str(num_build_threads)]
-
-        env = os.environ.copy()
-        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),
-                                                              self.distribution.get_version())
-        if not os.path.exists(self.build_temp):
-            os.makedirs(self.build_temp)
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
-        subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp, env=env)
+            ext.extra_compile_args = opts
+            ext.extra_link_args = link_opts
+        build_ext.build_extensions(self)
 
 
 setup(name='fenics-dolfin',
@@ -89,7 +145,7 @@ setup(name='fenics-dolfin',
                 "dolfin.fem",
                 "dolfin.la",
                 "dolfin_utils.test"],
-      ext_modules=[CMakeExtension('dolfin.cpp')],
-      cmdclass=dict(build_ext=CMakeBuild),
+      ext_modules=ext_modules,
+      cmdclass={'build_ext': BuildExt},
       install_requires=REQUIREMENTS,
       zip_safe=False)
