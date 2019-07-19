@@ -106,8 +106,12 @@ def parallelCompile(self, sources, output_dir=None, macros=None, include_dirs=No
 
     import multiprocessing
     import multiprocessing.pool
-    # Use half of processor count (probably best, in case of hyperthreading)
-    N = multiprocessing.cpu_count() // 2
+
+    if "CI" in os.environ:
+        N = 2
+    else:
+        # Use half of processor count (probably best, in case of hyperthreading)
+        N = multiprocessing.cpu_count() // 2
 
     def _single_compile(obj):
         try:
@@ -121,7 +125,7 @@ def parallelCompile(self, sources, output_dir=None, macros=None, include_dirs=No
     return objects
 
 
-# distutils.ccompiler.CCompiler.compile = parallelCompile
+distutils.ccompiler.CCompiler.compile = parallelCompile
 
 
 class BuildExt(build_ext):
