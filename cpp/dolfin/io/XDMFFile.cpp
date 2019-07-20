@@ -1245,7 +1245,7 @@ void XDMFFile::write(
     const std::vector<double>& values)
 {
   // Write clouds of points to XDMF/HDF5 with values
-  assert(points.rows() == values.size());
+  assert(points.rows() == (int)values.size());
 
   // Check that encoding is supported
   if (_encoding == Encoding::ASCII and _mpi_comm.size() != 1)
