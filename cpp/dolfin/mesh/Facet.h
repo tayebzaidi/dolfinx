@@ -23,7 +23,7 @@ class Facet : public MeshEntity
 {
 public:
   /// Constructor
-  Facet(const Mesh& mesh, std::size_t index)
+  Facet(const Mesh& mesh, std::int32_t index)
       : MeshEntity(mesh, mesh.topology().dim() - 1, index)
   {
     // Do nothing
@@ -31,19 +31,6 @@ public:
 
   /// Destructor
   ~Facet() = default;
-
-  /// Return true if facet is an exterior facet (relative to global
-  /// mesh, so this function will return false for facets on partition
-  /// boundaries). Facet connectivity must be initialized before calling
-  /// this function.
-  bool exterior() const
-  {
-    const std::size_t D = _mesh->topology().dim();
-    if (this->num_global_entities(D) == 1)
-      return true;
-    else
-      return false;
-  }
 };
 } // namespace mesh
 } // namespace dolfin

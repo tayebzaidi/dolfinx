@@ -129,7 +129,7 @@ void write_ascii_mesh(const mesh::Mesh& mesh, std::size_t cell_dim,
        << "\">";
   for (auto& v : mesh::MeshRange<mesh::Vertex>(mesh))
   {
-    Eigen::Vector3d p = v.x();
+    Eigen::Vector3d p = mesh.geometry().x(v.index());
     file << p[0] << " " << p[1] << " " << p[2] << "  ";
   }
   file << "</DataArray>" << std::endl << "</Points>" << std::endl;
@@ -144,7 +144,7 @@ void write_ascii_mesh(const mesh::Mesh& mesh, std::size_t cell_dim,
   const std::vector<std::int8_t> perm = mesh::vtk_mapping(celltype);
   for (auto& c : mesh::MeshRange<mesh::MeshEntity>(mesh, cell_dim))
   {
-    for (unsigned int i = 0; i != c.num_entities(0); ++i)
+    for (int i = 0; i != c.num_entities(0); ++i)
       file << c.entities(0)[perm[i]] << " ";
     file << " ";
   }
