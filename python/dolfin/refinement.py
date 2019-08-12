@@ -8,6 +8,7 @@
 
 from dolfin import cpp
 
+
 def refine(mesh, marker=None, redistribute=True):
     """Refine a mesh by edge bisection
 
