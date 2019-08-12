@@ -8,9 +8,9 @@
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/types.h>
 #include <dolfin/mesh/DistributedMeshTools.h>
-#include <dolfin/mesh/Edge.h>
 #include <dolfin/mesh/Geometry.h>
 #include <dolfin/mesh/Mesh.h>
+#include <dolfin/mesh/MeshEntity.h>
 #include <dolfin/mesh/MeshFunction.h>
 #include <dolfin/mesh/MeshIterator.h>
 #include <dolfin/mesh/Partitioning.h>
@@ -72,7 +72,7 @@ ParallelRefinement::edge_to_new_vertex() const
 //-----------------------------------------------------------------------------
 void ParallelRefinement::mark(const mesh::MeshEntity& entity)
 {
-  for (const auto& edge : mesh::EntityRange<mesh::Edge>(entity))
+  for (const auto& edge : mesh::EntityRange(entity, 1))
     mark(edge.index());
 }
 //-----------------------------------------------------------------------------
@@ -85,11 +85,11 @@ void ParallelRefinement::mark(const mesh::MeshFunction<int>& refinement_marker)
       = refinement_marker.values();
 
   for (const auto& entity :
-       mesh::MeshRange<mesh::MeshEntity>(_mesh, entity_dim))
+       mesh::MeshRange(_mesh, entity_dim))
   {
     if (mf_values[entity.index()] == 1)
     {
-      for (const auto& edge : mesh::EntityRange<mesh::Edge>(entity))
+      for (const auto& edge : mesh::EntityRange(entity, 1))
         mark(edge.index());
     }
   }
@@ -101,7 +101,7 @@ ParallelRefinement::marked_edge_list(const mesh::MeshEntity& cell) const
   std::vector<std::size_t> result;
 
   std::size_t i = 0;
-  for (const auto& edge : mesh::EntityRange<mesh::Edge>(cell))
+  for (const auto& edge : mesh::EntityRange(cell, 1))
   {
     if (_marked_edges[edge.index()])
       result.push_back(i);
@@ -140,6 +140,12 @@ void ParallelRefinement::create_new_vertices()
       _mesh.geometry().points().data(),
       _mesh.geometry().points().data() + _mesh.geometry().points().size());
 
+  // Compute all edge mid-points
+  Eigen::Array<int, Eigen::Dynamic, 1> edges(_mesh.num_entities(1));
+  std::iota(edges.data(), edges.data() + edges.rows(), 0);
+  const Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> midpoints
+      = mesh::midpoints(_mesh, 1, edges);
+
   // Tally up unshared marked edges, and shared marked edges which are
   // owned on this process.  Index them sequentially from zero.
   std::size_t n = 0;
@@ -166,10 +172,8 @@ void ParallelRefinement::create_new_vertices()
       // list
       if (owner)
       {
-        const Eigen::Vector3d midpoint
-            = mesh::midpoint(mesh::Edge(_mesh, local_i));
         for (std::size_t j = 0; j < 3; ++j)
-          _new_vertex_coordinates.push_back(midpoint[j]);
+          _new_vertex_coordinates.push_back(midpoints(local_i, j));
         _local_edge_to_new_vertex[local_i] = n++;
       }
     }
@@ -271,9 +275,19 @@ mesh::Mesh ParallelRefinement::partition(bool redistribute) const
   Eigen::Map<const EigenRowArrayXXd> points(_new_vertex_coordinates.data(),
                                             num_local_vertices, 3);
 
-  return mesh::Partitioning::build_distributed_mesh(
-      _mesh.mpi_comm(), _mesh.cell_type, points, cells, global_cell_indices,
-      _mesh.get_ghost_mode());
+  if (redistribute)
+  {
+    return mesh::Partitioning::build_distributed_mesh(
+        _mesh.mpi_comm(), _mesh.cell_type, points, cells, global_cell_indices,
+        _mesh.get_ghost_mode());
+  }
+
+  mesh::Mesh mesh(_mesh.mpi_comm(), _mesh.cell_type, points, cells,
+                  global_cell_indices, _mesh.get_ghost_mode());
+
+  mesh::DistributedMeshTools::init_facet_cell_connections(mesh);
+
+  return mesh;
 }
 //-----------------------------------------------------------------------------
 void ParallelRefinement::new_cells(const std::vector<std::int64_t>& idx)
