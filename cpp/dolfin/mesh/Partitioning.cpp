@@ -171,9 +171,11 @@ distribute_cells(const MPI_Comm mpi_comm,
   const std::size_t mpi_rank = dolfin::MPI::rank(mpi_comm);
 
   // Global offset, used to build global cell index, if not given
-  std::int64_t global_offset
-      = dolfin::MPI::global_offset(mpi_comm, cell_vertices.rows(), true);
   bool build_global_index = global_cell_indices.empty();
+  std::int64_t global_offset = 0;
+  if (build_global_index)
+    global_offset
+        = dolfin::MPI::global_offset(mpi_comm, cell_vertices.rows(), true);
 
   // Get dimensions
   const std::int32_t num_local_cells = cell_vertices.rows();
@@ -671,6 +673,9 @@ mesh::Mesh Partitioning::build_distributed_mesh(
   // Compute the cell partition
   PartitionData cell_partition
       = partition_cells(comm, nparts, cell_type, cells, graph_partitioner);
+
+  // Experimental reordering
+  cell_partition.optimise(comm);
 
   // Build mesh from local mesh data and provided cell partition
   mesh::Mesh mesh = Partitioning::build_from_partition(

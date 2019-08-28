@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <dolfin/common/MPI.h>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -74,6 +75,9 @@ public:
   /// process. Useful for testing
   /// @return int
   int num_ghosts() const;
+
+
+  void optimise(MPI_Comm comm);
 
 private:
   // Contiguous list of processes, indexed with offset, below
