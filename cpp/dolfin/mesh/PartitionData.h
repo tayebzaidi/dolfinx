@@ -78,6 +78,8 @@ public:
 
 
   void optimise(MPI_Comm comm);
+  void graph(MPI_Comm mpi_comm);
+
 
 private:
   // Contiguous list of processes, indexed with offset, below

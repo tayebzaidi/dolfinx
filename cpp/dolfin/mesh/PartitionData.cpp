@@ -57,6 +57,54 @@ int PartitionData::num_ghosts() const
   return _offset.size() - _dest_processes.size() - 1;
 }
 //-----------------------------------------------------------------------------
+void PartitionData::graph(MPI_Comm mpi_comm)
+{
+
+  // Make map of connections between processes {proc1, proc2} -> num_connections
+  std::map<std::pair<int, int>, int> neighbour_info;
+  for (std::size_t i = 0; i < _offset.size() - 1; ++i)
+  {
+    if (_offset[i + 1] - _offset[i] > 1)
+    {
+      for (int j = _offset[i]; j < _offset[i + 1]; ++j)
+        for (int k = j + 1; k < _offset[i + 1]; ++k)
+        {
+          std::pair<int, int> idx(_dest_processes[j], _dest_processes[k]);
+          neighbour_info[idx]++;
+          idx = {idx.second, idx.first};
+          neighbour_info[idx]++;
+        }
+    }
+  }
+
+  // Accumulate all connectivity on process 0
+  std::vector<int> send_data;
+  std::vector<int> recv_data;
+  for (auto& info : neighbour_info)
+  {
+    send_data.push_back(info.first.first);
+    send_data.push_back(info.first.second);
+    send_data.push_back(info.second);
+  }
+  MPI::gather(mpi_comm, send_data, recv_data);
+
+  neighbour_info.clear();
+  for (std::size_t i = 0; i < recv_data.size(); i += 3)
+  {
+    std::pair<int, int> idx(recv_data[i], recv_data[i + 1]);
+    neighbour_info[idx] += recv_data[i + 2];
+  }
+
+  std::stringstream s;
+
+  for (auto& info : neighbour_info)
+  {
+    s << info.first.first << ":" << info.first.second << " = " << info.second
+      << ",";
+  }
+  std::cout << s.str() << "\n";
+}
+//-----------------------------------------------------------------------------
 void PartitionData::optimise(MPI_Comm mpi_comm)
 {
   int rank = MPI::rank(mpi_comm);

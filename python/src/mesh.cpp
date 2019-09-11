@@ -343,7 +343,13 @@ void mesh(py::module& m)
   // dolfin::mesh::PartitionData class
   py::class_<dolfin::mesh::PartitionData,
              std::shared_ptr<dolfin::mesh::PartitionData>>(
-      m, "PartitionData", "PartitionData object");
+      m, "PartitionData", "PartitionData object")
+      .def("optimise",
+           [](dolfin::mesh::PartitionData& self, const MPICommWrapper comm) {
+             self.optimise(comm.get());
+           })
+      .def("graph", [](dolfin::mesh::PartitionData& self,
+                       const MPICommWrapper comm) { self.graph(comm.get()); });
 
   // dolfin::mesh::Partitioning::partition_cells
   m.def("partition_cells",
