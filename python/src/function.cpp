@@ -89,22 +89,23 @@ void function(py::module& m)
                              &dolfin::function::Function::value_rank)
       .def_property_readonly("value_shape",
                              &dolfin::function::Function::value_shape)
-      .def("eval",
-           [](const dolfin::function::Function& self,
-              Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
-                                      Eigen::Dynamic, Eigen::RowMajor>>
-                  u,
-              const Eigen::Ref<const dolfin::EigenRowArrayXXd> x,
-              const dolfin::mesh::MeshEntity& cell) { self.eval(u, x, cell); },
+      .def("eval_cell",
+           py::overload_cast<
+               const Eigen::Ref<const dolfin::EigenRowArrayXXd>,
+               const dolfin::mesh::MeshEntity&,
+               Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                       Eigen::Dynamic, Eigen::RowMajor>>>(
+               &dolfin::function::Function::eval, py::const_),
+           py::arg("x"), py::arg("cell"), py::arg("values"),
            "Evaluate Function (cell version)")
       .def("eval",
            py::overload_cast<
-               Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
-                                       Eigen::Dynamic, Eigen::RowMajor>>,
                const Eigen::Ref<const dolfin::EigenRowArrayXXd>,
-               const dolfin::geometry::BoundingBoxTree&>(
+               const dolfin::geometry::BoundingBoxTree&,
+               Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                       Eigen::Dynamic, Eigen::RowMajor>>>(
                &dolfin::function::Function::eval, py::const_),
-           py::arg("values"), py::arg("x"), py::arg("bb_tree"),
+           py::arg("x"), py::arg("bb_tree"), py::arg("values"),
            "Evaluate Function")
       .def("compute_point_values",
            &dolfin::function::Function::compute_point_values,
@@ -145,9 +146,8 @@ void function(py::module& m)
   // dolfin::function::Constant
   py::class_<dolfin::function::Constant,
              std::shared_ptr<dolfin::function::Constant>>(
-      m, "Constant", "A value constant wrt. integration domain",
-      py::buffer_protocol())
-      .def(py::init<std::vector<PetscScalar>, std::vector<int>>(),
+      m, "Constant", "A value constant with respect to integration domain")
+      .def(py::init<std::vector<int>, std::vector<PetscScalar>>(),
            "Create a constant from a scalar value array")
       .def("value",
            [](dolfin::function::Constant& self) {
