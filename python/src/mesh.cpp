@@ -71,6 +71,11 @@ void mesh(py::module& m)
       .value("shared_facet", dolfin::mesh::GhostMode::shared_facet)
       .value("shared_vertex", dolfin::mesh::GhostMode::shared_vertex);
 
+  // dolfin::mesh::Partitioner enums
+  py::enum_<dolfin::mesh::Partitioner>(m, "Partitioner")
+      .value("scotch", dolfin::mesh::Partitioner::scotch)
+      .value("parmetis", dolfin::mesh::Partitioner::parmetis);
+
   // dolfin::mesh::CoordinateDofs class
   py::class_<dolfin::mesh::CoordinateDofs,
              std::shared_ptr<dolfin::mesh::CoordinateDofs>>(
@@ -349,27 +354,28 @@ void mesh(py::module& m)
              self.optimise(comm.get());
            })
       .def("graph", [](dolfin::mesh::PartitionData& self,
-                       const MPICommWrapper comm) { self.graph(comm.get()); });
+                       const MPICommWrapper comm) { self.graph(comm.get()); })
+      .def("num_procs", &dolfin::mesh::PartitionData::num_procs);
 
   // dolfin::mesh::Partitioning::partition_cells
   m.def("partition_cells",
         [](const MPICommWrapper comm, int nparts,
            dolfin::mesh::CellType cell_type,
            const Eigen::Ref<const dolfin::EigenRowArrayXXi64> cells,
-           std::string partitioner) {
+           dolfin::mesh::Partitioner partitioner) {
           return dolfin::mesh::Partitioning::partition_cells(
               comm.get(), nparts, cell_type, cells, partitioner);
         });
 
   m.def("build_from_partition",
         [](const MPICommWrapper comm, dolfin::mesh::CellType cell_type,
-           const Eigen::Ref<const dolfin::EigenRowArrayXXi64> cells,
            const Eigen::Ref<const dolfin::EigenRowArrayXXd> points,
+           const Eigen::Ref<const dolfin::EigenRowArrayXXi64> cells,
            const std::vector<std::int64_t>& global_cell_indices,
-           dolfin::mesh::GhostMode ghost_mode,
-           dolfin::mesh::PartitionData& cell_partition) {
+           const dolfin::mesh::GhostMode ghost_mode,
+           const dolfin::mesh::PartitionData& cell_partition) {
           return dolfin::mesh::Partitioning::build_from_partition(
-              comm.get(), cell_type, cells, points, global_cell_indices,
+              comm.get(), cell_type, points, cells, global_cell_indices,
               ghost_mode, cell_partition);
         });
 
