@@ -102,6 +102,9 @@ void PartitionData::graph(MPI_Comm mpi_comm)
   std::cout << "shmComm = " << MPI::rank(shmComm) << "/" << MPI::size(shmComm)
             << "\n";
 
+  const int rank0 = (int)(MPI::rank(shmComm) == 0);
+  const int nnodes = MPI::sum(mpi_comm, rank0);
+
   if (mpi_rank == 0)
   {
     std::vector<std::set<int>> edgeconn(mpi_size);
@@ -167,7 +170,7 @@ void PartitionData::graph(MPI_Comm mpi_comm)
     SCOTCH_stratInit(&strat);
 
     // Set SCOTCH strategy
-    int nparts = 2;
+    int nparts = nnodes;
     SCOTCH_stratDgraphMapBuild(&strat, SCOTCH_STRATQUALITY, nparts, nparts,
                                0.0);
 
