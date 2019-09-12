@@ -123,6 +123,18 @@ void PartitionData::graph(MPI_Comm mpi_comm)
     assert((int)vertloctab.size() == mpi_size + 1);
     const SCOTCH_Num vertlocnbr = mpi_size;
 
+    std::vector<SCOTCH_Num> edloloctab(edgeloctab.size(), 0);
+    for (std::size_t i = 0; i < recv_data.size(); i += 3)
+    {
+      int from = recv_data[i];
+      int to = recv_data[i + 1];
+      int weight = recv_data[i + 2];
+      int pos = std::find(edgeloctab.begin() + vertloctab[from],
+                          edgeloctab.begin() + vertloctab[from + 1], to)
+                - edgeloctab.begin();
+      edloloctab[pos] += weight;
+    }
+
     std::cout << "vertloctab =";
     for (auto q : vertloctab)
       std::cout << q << ",";
@@ -130,6 +142,11 @@ void PartitionData::graph(MPI_Comm mpi_comm)
 
     std::cout << "edgeloctab =";
     for (auto q : edgeloctab)
+      std::cout << q << ",";
+    std::cout << "\n";
+
+    std::cout << "edloloctab =";
+    for (auto q : edloloctab)
       std::cout << q << ",";
     std::cout << "\n";
 

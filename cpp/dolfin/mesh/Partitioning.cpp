@@ -674,9 +674,6 @@ mesh::Mesh Partitioning::build_distributed_mesh(
   PartitionData cell_partition
       = partition_cells(comm, nparts, cell_type, cells, graph_partitioner);
 
-  // Experimental reordering
-  cell_partition.optimise(comm);
-
   // Build mesh from local mesh data and provided cell partition
   mesh::Mesh mesh = Partitioning::build_from_partition(
       comm, cell_type, points, cells, global_cell_indices, ghost_mode,
