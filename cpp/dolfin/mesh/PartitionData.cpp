@@ -8,6 +8,11 @@
 #include <algorithm>
 #include <sstream>
 
+extern "C"
+{
+#include <ptscotch.h>
+}
+
 using namespace dolfin;
 using namespace dolfin::mesh;
 
@@ -59,6 +64,8 @@ int PartitionData::num_ghosts() const
 //-----------------------------------------------------------------------------
 void PartitionData::graph(MPI_Comm mpi_comm)
 {
+  const int mpi_size = MPI::size(mpi_comm);
+  const int mpi_rank = MPI::rank(mpi_comm);
 
   // Make map of connections between processes {proc1, proc2} -> num_connections
   std::map<std::pair<int, int>, int> neighbour_info;
@@ -88,21 +95,78 @@ void PartitionData::graph(MPI_Comm mpi_comm)
   }
   MPI::gather(mpi_comm, send_data, recv_data);
 
-  neighbour_info.clear();
-  for (std::size_t i = 0; i < recv_data.size(); i += 3)
-  {
-    std::pair<int, int> idx(recv_data[i], recv_data[i + 1]);
-    neighbour_info[idx] += recv_data[i + 2];
-  }
+  MPI_Comm shmComm;
+  MPI_Comm_split_type(mpi_comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
+                      &shmComm);
 
-  std::stringstream s;
+  std::cout << "shmComm = " << MPI::rank(shmComm) << "/" << MPI::size(shmComm)
+            << "\n";
 
-  for (auto& info : neighbour_info)
+  if (mpi_rank == 0)
   {
-    s << info.first.first << ":" << info.first.second << " = " << info.second
-      << ",";
+    std::vector<std::set<int>> edgeconn(mpi_size);
+
+    for (std::size_t i = 0; i < recv_data.size(); i += 3)
+    {
+      edgeconn[recv_data[i]].insert(recv_data[i + 1]);
+      std::pair<int, int> idx(recv_data[i], recv_data[i + 1]);
+      neighbour_info[idx] += recv_data[i + 2];
+    }
+
+    std::vector<SCOTCH_Num> vertloctab = {0};
+    std::vector<SCOTCH_Num> edgeloctab;
+    for (auto& node : edgeconn)
+    {
+      edgeloctab.insert(edgeloctab.end(), node.begin(), node.end());
+      vertloctab.push_back(edgeloctab.size());
+    }
+    assert((int)vertloctab.size() == mpi_size + 1);
+    const SCOTCH_Num vertlocnbr = mpi_size;
+
+    std::cout << "vertloctab =";
+    for (auto q : vertloctab)
+      std::cout << q << ",";
+    std::cout << "\n";
+
+    std::cout << "edgeloctab =";
+    for (auto q : edgeloctab)
+      std::cout << q << ",";
+    std::cout << "\n";
+
+    SCOTCH_Dgraph dgrafdat;
+    if (SCOTCH_dgraphInit(&dgrafdat, MPI_COMM_SELF) != 0)
+      throw std::runtime_error("Error initializing SCOTCH graph");
+
+    if (SCOTCH_dgraphBuild(
+            &dgrafdat, 0, vertlocnbr, vertlocnbr,
+            const_cast<SCOTCH_Num*>(vertloctab.data()), nullptr, nullptr,
+            nullptr, edgeloctab.size(), edgeloctab.size(),
+            const_cast<SCOTCH_Num*>(edgeloctab.data()), nullptr, nullptr))
+    {
+      throw std::runtime_error("Error building SCOTCH graph");
+    }
+
+    SCOTCH_Strat strat;
+    SCOTCH_stratInit(&strat);
+
+    // Set SCOTCH strategy
+    int nparts = 2;
+    SCOTCH_stratDgraphMapBuild(&strat, SCOTCH_STRATQUALITY, nparts, nparts,
+                               0.0);
+
+    std::vector<SCOTCH_Num> node_partition(mpi_size);
+
+    SCOTCH_randomReset();
+
+    // Partition graph
+    if (SCOTCH_dgraphPart(&dgrafdat, nparts, &strat, node_partition.data()))
+      throw std::runtime_error("Error during SCOTCH partitioning");
+
+    std::cout << "node partition = ";
+    for (auto q : node_partition)
+      std::cout << q << ", ";
+    std::cout << "\n";
   }
-  std::cout << s.str() << "\n";
 }
 //-----------------------------------------------------------------------------
 void PartitionData::optimise(MPI_Comm mpi_comm)
