@@ -105,6 +105,8 @@ void PartitionData::graph(MPI_Comm mpi_comm)
   const int rank0 = (int)(MPI::rank(shmComm) == 0);
   const int nnodes = MPI::sum(mpi_comm, rank0);
 
+  std::vector<int> renumbering(mpi_size);
+
   if (mpi_rank == 0)
   {
     std::vector<std::set<int>> edgeconn(mpi_size);
@@ -186,7 +188,31 @@ void PartitionData::graph(MPI_Comm mpi_comm)
     for (auto q : node_partition)
       std::cout << q << ", ";
     std::cout << "\n";
+
+    int c = 0;
+    for (int i = 0; i < nparts; ++i)
+    {
+      for (int j = 0; j < mpi_size; ++j)
+      {
+        if (node_partition[j] == i)
+        {
+          renumbering[j] = c;
+          ++c;
+        }
+      }
+    }
+
+    std::cout << "renumbering = ";
+    for (auto q : renumbering)
+      std::cout << q << ", ";
+    std::cout << "\n";
   }
+
+  MPI::broadcast(mpi_comm, renumbering);
+
+  // Renumber
+  for (auto& q : _dest_processes)
+    q = renumbering[q];
 }
 //-----------------------------------------------------------------------------
 void PartitionData::optimise(MPI_Comm mpi_comm)
