@@ -350,10 +350,6 @@ void mesh(py::module& m)
   py::class_<dolfin::mesh::PartitionData,
              std::shared_ptr<dolfin::mesh::PartitionData>>(
       m, "PartitionData", "PartitionData object")
-      .def("optimise",
-           [](dolfin::mesh::PartitionData& self, const MPICommWrapper comm) {
-             self.optimise(comm.get());
-           })
       .def("graph", [](dolfin::mesh::PartitionData& self,
                        const MPICommWrapper comm) { self.graph(comm.get()); })
       .def("num_procs", &dolfin::mesh::PartitionData::num_procs);

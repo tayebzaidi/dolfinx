@@ -70,7 +70,8 @@ public:
   int num_ghosts() const;
 
 
-  void optimise(MPI_Comm comm);
+  /// Make a graph of the partition data and renumber so that partitions
+  /// on the same node are closest together.
   void graph(MPI_Comm mpi_comm);
 
 
