@@ -112,11 +112,7 @@ void PartitionData::graph(MPI_Comm mpi_comm)
     std::vector<std::set<int>> edgeconn(mpi_size);
 
     for (std::size_t i = 0; i < recv_data.size(); i += 3)
-    {
       edgeconn[recv_data[i]].insert(recv_data[i + 1]);
-      std::pair<int, int> idx(recv_data[i], recv_data[i + 1]);
-      neighbour_info[idx] += recv_data[i + 2];
-    }
 
     std::vector<SCOTCH_Num> vertloctab = {0};
     std::vector<SCOTCH_Num> edgeloctab;
