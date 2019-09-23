@@ -109,32 +109,31 @@ void PartitionData::graph(MPI_Comm mpi_comm)
 
   if (mpi_rank == 0)
   {
-    std::vector<std::set<int>> edgeconn(mpi_size);
-
+    std::vector<std::map<int, int>> edgeconn(mpi_size);
     for (std::size_t i = 0; i < recv_data.size(); i += 3)
-      edgeconn[recv_data[i]].insert(recv_data[i + 1]);
+    {
+      std::map<int, int>& ec = edgeconn[recv_data[i]];
+      auto it = ec.find(recv_data[i + 1]);
+      if (it == ec.end())
+        ec.insert({recv_data[i + 1], recv_data[i + 2]});
+      else
+        it->second += recv_data[i + 2];
+    }
 
     std::vector<SCOTCH_Num> vertloctab = {0};
     std::vector<SCOTCH_Num> edgeloctab;
+    std::vector<SCOTCH_Num> edloloctab;
     for (auto& node : edgeconn)
     {
-      edgeloctab.insert(edgeloctab.end(), node.begin(), node.end());
+      for (const auto& remote : node)
+      {
+        edgeloctab.push_back(remote.first);
+        edloloctab.push_back(remote.second);
+      }
       vertloctab.push_back(edgeloctab.size());
     }
     assert((int)vertloctab.size() == mpi_size + 1);
     const SCOTCH_Num vertlocnbr = mpi_size;
-
-    std::vector<SCOTCH_Num> edloloctab(edgeloctab.size(), 0);
-    for (std::size_t i = 0; i < recv_data.size(); i += 3)
-    {
-      int from = recv_data[i];
-      int to = recv_data[i + 1];
-      int weight = recv_data[i + 2];
-      int pos = std::find(edgeloctab.begin() + vertloctab[from],
-                          edgeloctab.begin() + vertloctab[from + 1], to)
-                - edgeloctab.begin();
-      edloloctab[pos] += weight;
-    }
 
     std::cout << "vertloctab =";
     for (auto q : vertloctab)
