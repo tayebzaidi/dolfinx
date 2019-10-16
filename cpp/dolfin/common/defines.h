@@ -38,4 +38,8 @@ bool has_scotch();
 /// Return true if DOLFIN is compiled with ParMETIS
 bool has_parmetis();
 
+/// Return alignment of Eigen arrays, as reported by EIGEN_DEFAULT_ALIGN_BYTES
+/// at compilation time
+int eigen_default_align_bytes();
+
 } // namespace dolfin

@@ -6,6 +6,7 @@
 
 #include "defines.h"
 #include "types.h"
+#include <Eigen/Dense>
 #include <hdf5.h>
 #include <petscversion.h>
 
@@ -55,3 +56,4 @@ bool dolfin::has_parmetis()
 #endif
 }
 //-------------------------------------------------------------------------
+int dolfin::eigen_default_align_bytes() { return EIGEN_DEFAULT_ALIGN_BYTES; }

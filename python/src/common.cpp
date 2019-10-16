@@ -36,6 +36,7 @@ void common(py::module& m)
   m.attr("has_parmetis") = dolfin::has_parmetis();
   m.attr("has_petsc_complex") = dolfin::has_petsc_complex();
   m.attr("has_slepc") = dolfin::has_slepc();
+  m.attr("eigen_default_align_bytes") = dolfin::eigen_default_align_bytes();
 #ifdef HAS_PYBIND11_SLEPC4PY
   m.attr("has_slepc4py") = true;
 #else
