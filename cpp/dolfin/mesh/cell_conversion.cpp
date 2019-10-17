@@ -91,6 +91,8 @@ std::vector<std::uint8_t> mesh::vtk_cell_permutation(mesh::CellType type,
     {
     case 4:
       return {0, 1, 2, 3};
+    case 10:
+      return {0, 1, 2, 3, 9, 6, 8, 7, 5, 4};
     default:
       throw std::runtime_error("Higher order tetrahedron not supported");
     }
@@ -319,7 +321,17 @@ std::vector<std::uint8_t> mesh::default_cell_permutation(mesh::CellType type,
     n = 1;
     break;
   case mesh::CellType::tetrahedron:
-    n = 4;
+    switch (degree)
+    {
+    case 1:
+      n = 4;
+      break;
+    case 2:
+      n = 10;
+      break;
+    default:
+      throw std::runtime_error("Tetrahedron with order > 3 is not supported");
+    }
     break;
   case mesh::CellType::triangle:
     n = (degree + 1) * (degree + 2) / 2;
