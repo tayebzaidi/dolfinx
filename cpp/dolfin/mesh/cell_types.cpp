@@ -524,8 +524,11 @@ int mesh::cell_degree(mesh::CellType type, int num_nodes)
       return 1;
     case 10:
       return 2;
+    case 20:
+      return 3;
     default:
-      throw std::runtime_error("Tetrahedron order > 2 not supported");
+      std::cout << num_nodes << "aajfa";
+      throw std::runtime_error("Tetrahedron order > 3 not supported");
     }
   case mesh::CellType::quadrilateral:
   {

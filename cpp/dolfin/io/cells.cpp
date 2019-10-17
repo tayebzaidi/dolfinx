@@ -89,6 +89,10 @@ std::vector<std::uint8_t> io::cells::dolfin_to_vtk(mesh::CellType type,
       return {0, 1, 2, 3};
     case 10:
       return {0, 1, 2, 3, 9, 6, 8, 7, 5, 4};
+    case 20:
+      return {0,  1,  2, 3, 14, 15, 8,  9,  13, 12,
+              10, 11, 6, 7, 4,  5,  18, 16, 17, 19};
+
     default:
       throw std::runtime_error("Higher order tetrahedron not supported");
     }
@@ -318,6 +322,9 @@ io::cells::default_cell_permutation(mesh::CellType type, std::int32_t degree)
       break;
     case 2:
       n = 10;
+      break;
+    case 3:
+      n = 20;
       break;
     default:
       throw std::runtime_error("Tetrahedron with order > 3 is not supported");
