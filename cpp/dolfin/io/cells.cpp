@@ -273,13 +273,14 @@ io::cells::gmsh_to_dolfin_ordering(
 std::vector<std::uint8_t>
 io::cells::default_cell_permutation(mesh::CellType type, int degree)
 {
+  int n;
   switch (type)
   {
   case mesh::CellType::quadrilateral:
   {
     // Quadrilateral cells follow lexciographic order (LG) and must be
     // mapped to tensor product ordering.
-    const int n = (degree + 1) * (degree + 1);
+    n = (degree + 1) * (degree + 1);
     switch (degree)
     {
     case 1:
@@ -293,7 +294,6 @@ io::cells::default_cell_permutation(mesh::CellType type, int degree)
     }
   }
   case mesh::CellType::hexahedron:
-  {
     switch (degree)
     {
     case 1:
@@ -331,7 +331,6 @@ io::cells::default_cell_permutation(mesh::CellType type, int degree)
   default:
     throw std::runtime_error("Unknown cell type.");
   }
-
-    return io::cells::dolfin_to_vtk(type, n);
-  }
-  //-----------------------------------------------------------------------------
+  return io::cells::dolfin_to_vtk(type, n);
+}
+//-----------------------------------------------------------------------------
