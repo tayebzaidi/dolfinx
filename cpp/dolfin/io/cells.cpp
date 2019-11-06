@@ -5,9 +5,6 @@
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #include "cells.h"
-#include <Eigen/Dense>
-#include <cstdint>
-#include <dolfin/common/log.h>
 #include <dolfin/mesh/cell_types.h>
 #include <numeric>
 #include <stdexcept>
@@ -34,14 +31,11 @@ std::vector<std::uint8_t> io::cells::dolfin_to_vtk(mesh::CellType type,
     permutation[j++] = 1;
     permutation[j++] = 2;
 
-    int degree = mesh::cell_degree(type, num_nodes);
-
+    const int degree = mesh::cell_degree(type, num_nodes);
     for (int k = 1; k < degree; ++k)
       permutation[j++] = 3 + 2 * (degree - 1) + k - 1;
-
     for (int k = 1; k < degree; ++k)
       permutation[j++] = 3 + k - 1;
-
     for (int k = 1; k < degree; ++k)
       permutation[j++] = 2 * degree - (k - 1);
 
@@ -78,7 +72,8 @@ std::vector<std::uint8_t> io::cells::dolfin_to_vtk(mesh::CellType type,
     default:
       return permutation;
     }
-    for (int k = 0; unsigned(k) < remainders.size(); ++k)
+
+    for (std::size_t k = 0; k < remainders.size(); ++k)
       permutation[j++] = base + remainders[k];
     return permutation;
   }
@@ -94,7 +89,7 @@ std::vector<std::uint8_t> io::cells::dolfin_to_vtk(mesh::CellType type,
               10, 11, 6, 7, 4,  5,  18, 16, 17, 19};
 
     default:
-      throw std::runtime_error("Higher order tetrahedron not supported");
+      throw std::runtime_error("Unknown tetrahedron layout");
     }
   case mesh::CellType::quadrilateral:
   {
@@ -132,41 +127,41 @@ std::vector<std::uint8_t> io::cells::dolfin_to_vtk(mesh::CellType type,
     return permutation;
   }
   case mesh::CellType::hexahedron:
+  {
     switch (num_nodes)
     {
     case 8:
       return {0, 1, 3, 2, 4, 5, 7, 6};
     default:
-      throw std::runtime_error("Higher order hexahedron not supported");
+      throw std::runtime_error("Higher order hexahedron not supported.");
     }
   default:
     throw std::runtime_error("Unknown cell type.");
+  }
   }
 }
 //-----------------------------------------------------------------------------
 std::vector<std::uint8_t> io::cells::vtk_to_tp(mesh::CellType type,
                                                int num_nodes)
 {
+  const std::vector<std::uint8_t> reversed
+      = io::cells::dolfin_to_vtk(type, num_nodes);
   switch (type)
   {
-    {
-    case mesh::CellType::quadrilateral:
-    {
-      std::vector<std::uint8_t> reversed
-          = io::cells::dolfin_to_vtk(type, num_nodes);
-      std::vector<std::uint8_t> perm(num_nodes);
-      for (int i = 0; i < num_nodes; ++i)
-        perm[reversed[i]] = i;
-      return perm;
-    }
-    case mesh::CellType::hexahedron:
-      std::vector<std::uint8_t> reversed
-          = io::cells::dolfin_to_vtk(type, num_nodes);
-      std::vector<std::uint8_t> perm(num_nodes);
-      for (int i = 0; i < num_nodes; ++i)
-        perm[reversed[i]] = i;
-      return perm;
-    }
+  case mesh::CellType::quadrilateral:
+  {
+    std::vector<std::uint8_t> perm(num_nodes);
+    for (int i = 0; i < num_nodes; ++i)
+      perm[reversed[i]] = i;
+    return perm;
+  }
+  case mesh::CellType::hexahedron:
+  {
+    std::vector<std::uint8_t> perm(num_nodes);
+    for (int i = 0; i < num_nodes; ++i)
+      perm[reversed[i]] = i;
+    return perm;
+  }
   default:
     throw std::runtime_error("Simplicies can be expressed as TensorProduct");
   }
@@ -184,21 +179,20 @@ std::vector<std::uint8_t> io::cells::lex_to_tp(mesh::CellType type,
     const int n = sqrt(num_nodes);
 
     std::vector<std::uint8_t> permutation(num_nodes);
-    int j = 0;
     std::vector<std::uint8_t> rows(n);
     std::iota(std::next(rows.begin()), std::prev(rows.end()), 2);
     rows.front() = 0;
     rows.back() = 1;
 
-    std::vector<std::uint8_t>::iterator row;
-    for (row = rows.begin(); row != rows.end(); ++row)
+    int j = 0;
+    for (auto row : rows)
     {
-      permutation[j] = *row;
-      permutation[j + n - 1] = n + *row;
+      permutation[j] = row;
+      permutation[j + n - 1] = n + row;
       j++;
       for (int index = 0; index < n - 2; ++index)
       {
-        permutation[j] = (2 + index) * n + *row;
+        permutation[j] = (2 + index) * n + row;
         j++;
       }
       j++;
@@ -206,15 +200,17 @@ std::vector<std::uint8_t> io::cells::lex_to_tp(mesh::CellType type,
     return permutation;
   }
   case mesh::CellType::hexahedron:
+  {
     switch (num_nodes)
     {
     case 8:
       return {0, 1, 3, 2, 4, 5, 7, 6};
     default:
-      throw std::runtime_error("Higher order hexahedron not supported");
+      throw std::runtime_error("Higher order hexahedron not supported.");
     }
+  }
   default:
-    throw std::runtime_error("Simplicies can be expressed as TensorProduct");
+    throw std::runtime_error("Simplicies can be expressed as TensorProduct.");
   }
 }
 //-----------------------------------------------------------------------------
@@ -223,42 +219,40 @@ std::vector<std::uint8_t> io::cells::vtk_to_dolfin(mesh::CellType type,
 {
   switch (type)
   {
+  case mesh::CellType::point:
+    return {0};
+  case mesh::CellType::interval:
+    return {0, 1};
+  case mesh::CellType::triangle:
+  {
+    const std::vector<std::uint8_t> reversed
+        = io::cells::dolfin_to_vtk(type, num_nodes);
+    std::vector<std::uint8_t> perm(num_nodes);
+    for (int i = 0; i < num_nodes; ++i)
+      perm[reversed[i]] = i;
+    return perm;
+  }
+  case mesh::CellType::tetrahedron:
+    switch (num_nodes)
     {
-    case mesh::CellType::point:
-      return {0};
-    case mesh::CellType::interval:
-      return {0, 1};
-    case mesh::CellType::triangle:
-    {
-      std::vector<std::uint8_t> reversed
-          = io::cells::dolfin_to_vtk(type, num_nodes);
-      std::vector<std::uint8_t> perm(num_nodes);
-      for (int i = 0; i < num_nodes; ++i)
-        perm[reversed[i]] = i;
-      return perm;
-    }
-    case mesh::CellType::tetrahedron:
-      switch (num_nodes)
-      {
-      case 4:
-        return {0, 1, 2, 3};
-      default:
-        throw std::runtime_error("Higher order tetrahedron not supported");
-      }
-    case mesh::CellType::quadrilateral:
-      return io::cells::vtk_to_tp(type, num_nodes);
-    case mesh::CellType::hexahedron:
-      return io::cells::vtk_to_tp(type, num_nodes);
+    case 4:
+      return {0, 1, 2, 3};
     default:
-      throw std::runtime_error("Unknown cell type.");
+      throw std::runtime_error("Higher order tetrahedron not supported.");
     }
+  case mesh::CellType::quadrilateral:
+    return io::cells::vtk_to_tp(type, num_nodes);
+  case mesh::CellType::hexahedron:
+    return io::cells::vtk_to_tp(type, num_nodes);
+  default:
+    throw std::runtime_error("Unknown cell type.");
   }
 }
 //-----------------------------------------------------------------------------
 Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 io::cells::gmsh_to_dolfin_ordering(
-    Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-        cells,
+    const Eigen::Ref<const Eigen::Array<
+        std::int64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>& cells,
     mesh::CellType type)
 {
   /// Get VTK permutation for given cell type
@@ -268,24 +262,24 @@ io::cells::gmsh_to_dolfin_ordering(
   /// Permute input cells
   Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       cells_dolfin(cells.rows(), cells.cols());
-  for (int c = 0; c < cells_dolfin.rows(); ++c)
+  for (Eigen::Index c = 0; c < cells_dolfin.rows(); ++c)
   {
-    for (int v = 0; v < cells_dolfin.cols(); ++v)
+    for (Eigen::Index v = 0; v < cells_dolfin.cols(); ++v)
       cells_dolfin(c, v) = cells(c, permutation[v]);
   }
   return cells_dolfin;
 }
 //-----------------------------------------------------------------------------
 std::vector<std::uint8_t>
-io::cells::default_cell_permutation(mesh::CellType type, std::int32_t degree)
+io::cells::default_cell_permutation(mesh::CellType type, int degree)
 {
-  int n;
   switch (type)
   {
   case mesh::CellType::quadrilateral:
+  {
     // Quadrilateral cells follow lexciographic order (LG) and must be
     // mapped to tensor product ordering.
-    n = (degree + 1) * (degree + 1);
+    const int n = (degree + 1) * (degree + 1);
     switch (degree)
     {
     case 1:
@@ -297,8 +291,9 @@ io::cells::default_cell_permutation(mesh::CellType type, std::int32_t degree)
       // you need VTK ordering.
       return io::cells::dolfin_to_vtk(type, n);
     }
-
+  }
   case mesh::CellType::hexahedron:
+  {
     switch (degree)
     {
     case 1:
@@ -337,6 +332,6 @@ io::cells::default_cell_permutation(mesh::CellType type, std::int32_t degree)
     throw std::runtime_error("Unknown cell type.");
   }
 
-  return io::cells::dolfin_to_vtk(type, n);
-}
-//-----------------------------------------------------------------------------
+    return io::cells::dolfin_to_vtk(type, n);
+  }
+  //-----------------------------------------------------------------------------
