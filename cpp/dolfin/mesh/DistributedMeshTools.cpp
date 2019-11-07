@@ -394,7 +394,7 @@ void DistributedMeshTools::number_entities(const Mesh& mesh, int d)
   if (dolfin::MPI::size(mesh.mpi_comm()) == 1)
   {
     // Set global entity numbers in mesh
-    mesh.create_entities(d);
+    assert(mesh.topology().connectivity(d, 0));
     _mesh.topology().set_num_entities_global(d, mesh.num_entities(d));
     std::vector<std::int64_t> global_indices(mesh.num_entities(d), 0);
     std::iota(global_indices.begin(), global_indices.end(), 0);
