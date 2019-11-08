@@ -419,6 +419,85 @@ std::size_t Mesh::create_entities(int dim) const
   // Number globally
   DistributedMeshTools::number_entities(*mesh, dim);
 
+  // Reorder so that ghosts appear at the end, and fix the ghosting
+  int mpi_rank = MPI::rank(mpi_comm());
+  std::vector<int> remap(num_entities(dim));
+  std::map<std::int32_t, std::set<std::int32_t>>& shared_entities
+      = _topology->shared_entities(dim);
+
+  std::vector<int> ghost_owner;
+  for (int i = 0; i < num_entities(dim); ++i)
+  {
+    auto it = shared_entities.find(i);
+    if (it == shared_entities.end())
+      remap[i] = 0;
+    else
+    {
+      int owner = *(it->second.begin());
+      if (owner > mpi_rank)
+        remap[i] = -1;
+      else
+      {
+        remap[i] = -2;
+        ghost_owner.push_back(owner);
+      }
+    }
+  }
+
+  int n = 0;
+  for (std::size_t i = 0; i < remap.size(); ++i)
+  {
+    if (remap[i] == 0)
+      remap[i] = n++;
+  }
+  for (std::size_t i = 0; i < remap.size(); ++i)
+  {
+    if (remap[i] == -1)
+      remap[i] = n++;
+  }
+  for (std::size_t i = 0; i < remap.size(); ++i)
+  {
+    if (remap[i] == -2)
+      remap[i] = n++;
+  }
+
+  // Remap entity-vertex connectivity
+  const int num_vertices
+      = mesh::num_cell_vertices(mesh::cell_entity_type(cell_type(), dim));
+  std::shared_ptr<Connectivity> ev = _topology->connectivity(dim, 0);
+  Eigen::Map<Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic,
+                          Eigen::RowMajor>>
+      ev_array(ev->connections().data(), num_entities(dim), num_vertices);
+
+  Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      rm_array(num_entities(dim), num_vertices);
+  for (std::size_t i = 0; i < remap.size(); ++i)
+    rm_array.row(remap[i]) = ev_array.row(i);
+  ev_array = rm_array;
+
+  // Remap cell-entity connectivity
+  std::shared_ptr<Connectivity> ce
+      = _topology->connectivity(_topology->dim(), dim);
+  Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& ce_con = ce->connections();
+  for (int i = 0; i < ce_con.size(); ++i)
+    ce_con[i] = remap[ce_con[i]];
+
+  // Remap sharing
+  std::map<std::int32_t, std::set<std::int32_t>> rm_shared_entities;
+  for (auto& it : _topology->shared_entities(dim))
+    rm_shared_entities.insert({remap[it.first], it.second});
+  _topology->shared_entities(dim) = rm_shared_entities;
+
+  // Remap global indices
+  std::vector<std::int64_t> gi(_topology->global_indices(dim));
+  for (std::size_t i = 0; i < remap.size(); ++i)
+    gi[i] = gi[remap[i]];
+  _topology->set_global_indices(dim, gi);
+
+  // Set up ghosting data
+  _topology->init_ghost(dim, num_entities(dim) - ghost_owner.size());
+  _topology->entity_owner(dim) = ghost_owner;
+
   return _topology->size(dim);
 }
 //-----------------------------------------------------------------------------

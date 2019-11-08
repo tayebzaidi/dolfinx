@@ -259,6 +259,13 @@ compute_entity_numbering(const Mesh& mesh, int d)
     }
   }
 
+  std::stringstream s;
+  s << "rank=" << mpi_rank << ": local=" << (n - local_offset)
+    << ", shared=" << num_local - (n - local_offset)
+    << ", ghost=" << mesh.num_entities(d) - num_local << "\n";
+
+  std::cout << s.str() << "\n";
+
   // Owned and shared
   for (const auto& q : shared_entities)
   {
@@ -436,7 +443,7 @@ void DistributedMeshTools::init_facet_cell_connections(Mesh& mesh)
   // Create vector to hold number of cells connected to each
   // facet. Initially copy over from local values.
 
-  Eigen::Array<std::int32_t, Eigen::Dynamic, 1> num_global_neighbors(
+  Eigen::Array<std::int32_t, Eigen::Dynamic, 1> num_global_neighbours(
       mesh.num_entities(D - 1));
 
   std::map<std::int32_t, std::set<std::int32_t>>& shared_facets
@@ -449,11 +456,11 @@ void DistributedMeshTools::init_facet_cell_connections(Mesh& mesh)
     assert(mesh.topology().connectivity(D - 1, D));
     auto connectivity = mesh.topology().connectivity(D - 1, D);
     for (auto& f : mesh::MeshRange(mesh, D - 1))
-      num_global_neighbors[f.index()] = connectivity->size(f.index());
+      num_global_neighbours[f.index()] = connectivity->size(f.index());
 
     // All shared facets must have two cells, if no ghost cells
     for (auto f_it = shared_facets.begin(); f_it != shared_facets.end(); ++f_it)
-      num_global_neighbors[f_it->first] = 2;
+      num_global_neighbours[f_it->first] = 2;
   }
   else
   {
@@ -461,74 +468,72 @@ void DistributedMeshTools::init_facet_cell_connections(Mesh& mesh)
     // need to check connectivity with the cell owner.
 
     const std::int32_t mpi_size = MPI::size(mesh.mpi_comm());
-    std::vector<std::vector<std::size_t>> send_facet(mpi_size);
-    std::vector<std::vector<std::size_t>> recv_facet(mpi_size);
+    std::vector<std::vector<std::int64_t>> send_facet(mpi_size);
+    std::vector<std::vector<std::int64_t>> recv_facet(mpi_size);
 
-    // Map shared facets
-    std::map<std::size_t, std::size_t> global_to_local_facet;
-
-    const std::vector<std::int32_t>& cell_owners
-        = mesh.topology().entity_owner(D);
-    const std::int32_t ghost_offset_c = mesh.topology().ghost_offset(D);
-    const std::int32_t ghost_offset_f = mesh.topology().ghost_offset(D - 1);
     const std::map<std::int32_t, std::set<std::int32_t>>& sharing_map_f
         = mesh.topology().shared_entities(D - 1);
-    const auto& global_facets = mesh.topology().global_indices(D - 1);
-    assert(mesh.topology().connectivity(D - 1, D));
-    auto connectivity = mesh.topology().connectivity(D - 1, D);
-    for (auto& f : mesh::MeshRange(mesh, D - 1, mesh::MeshRangeType::ALL))
+    const std::vector<std::int64_t>& global_facets
+        = mesh.topology().global_indices(D - 1);
+    std::shared_ptr<const Connectivity> connectivity
+        = mesh.topology().connectivity(D - 1, D);
+    std::map<std::int64_t, int> global_f_to_num_cells;
+
+    for (int fi = 0; fi < mesh.num_entities(D - 1); ++fi)
     {
-      // Insert shared facets into mapping
-      if (sharing_map_f.find(f.index()) != sharing_map_f.end())
-        global_to_local_facet.insert({global_facets[f.index()], f.index()});
-
-      // Copy local values
-      const int n_cells = connectivity->size(f.index());
-      num_global_neighbors[f.index()] = n_cells;
-
-      if ((f.index() >= ghost_offset_f) and n_cells == 1)
+      auto it = sharing_map_f.find(fi);
+      if (it != sharing_map_f.end())
       {
-        // Singly attached ghost facet - check with owner of attached
-        // cell
-        assert(f.entities(D)[0] >= ghost_offset_c);
-        const int owner = cell_owners[f.entities(D)[0] - ghost_offset_c];
-        send_facet[owner].push_back(global_facets[f.index()]);
+        const std::int64_t gfi = global_facets[fi];
+        const int ncells = connectivity->size(fi);
+        global_f_to_num_cells.insert({gfi, ncells});
+        for (auto p : it->second)
+        {
+          send_facet[p].push_back(gfi);
+          send_facet[p].push_back(ncells);
+        }
       }
     }
 
     MPI::all_to_all(mesh.mpi_comm(), send_facet, recv_facet);
 
-    // Convert received global facet index into number of attached cells
-    // and return to sender
-    std::vector<std::vector<std::size_t>> send_response(mpi_size);
-    for (std::int32_t p = 0; p < mpi_size; ++p)
+    // Get the maximum number of shared cells for each shared facet on any
+    // process
+    for (int p = 0; p < mpi_size; ++p)
     {
-      for (auto r = recv_facet[p].begin(); r != recv_facet[p].end(); ++r)
+      for (std::size_t i = 0; i < recv_facet[p].size(); i += 2)
       {
-        auto map_it = global_to_local_facet.find(*r);
-        assert(map_it != global_to_local_facet.end());
-        const mesh::MeshEntity local_facet(mesh, D - 1, map_it->second);
-        const int n_cells = connectivity->size(map_it->second);
-        send_response[p].push_back(n_cells);
+        auto it = global_f_to_num_cells.find(recv_facet[p][i]);
+        if (it == global_f_to_num_cells.end())
+        {
+          global_f_to_num_cells.insert(
+              {recv_facet[p][i], recv_facet[p][i + 1]});
+        }
+        else
+        {
+          it->second = std::max(it->second, (int)recv_facet[p][i + 1]);
+        }
       }
     }
 
-    MPI::all_to_all(mesh.mpi_comm(), send_response, recv_facet);
-
-    // Insert received result into same facet that it came from
-    for (std::int32_t p = 0; p < mpi_size; ++p)
+    for (int fi = 0; fi < mesh.num_entities(D - 1); ++fi)
     {
-      for (std::size_t i = 0; i < recv_facet[p].size(); ++i)
+      auto it = sharing_map_f.find(fi);
+      if (it == sharing_map_f.end())
+        num_global_neighbours[fi] = connectivity->size(fi);
+      else
       {
-        auto f_it = global_to_local_facet.find(send_facet[p][i]);
-        assert(f_it != global_to_local_facet.end());
-        num_global_neighbors[f_it->second] = recv_facet[p][i];
+        // shared facet
+        const auto it = global_f_to_num_cells.find(global_facets[fi]);
+        assert(it != global_f_to_num_cells.end());
+        num_global_neighbours[fi] = it->second;
       }
     }
   }
 
   assert(mesh.topology().connectivity(D - 1, D));
-  mesh.topology().connectivity(D - 1, D)->set_global_size(num_global_neighbors);
+  mesh.topology().connectivity(D - 1, D)->set_global_size(
+      num_global_neighbours);
 }
 //-----------------------------------------------------------------------------
 Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
