@@ -200,6 +200,7 @@ def test_matrix_assembly_block():
 
     # Monolithic blocked
     A0 = dolfin.fem.assemble_matrix_block(a_block, [bc])
+    A0.assemble()
     b0 = dolfin.fem.assemble_vector_block(L_block, a_block, [bc])
     assert A0.getType() != "nest"
     Anorm0 = A0.norm()
@@ -207,9 +208,18 @@ def test_matrix_assembly_block():
 
     # Nested (MatNest)
     A1 = dolfin.fem.assemble_matrix_nest(a_block, [bc])
+    A1.assemble()
     Anorm1 = nest_matrix_norm(A1)
     assert Anorm0 == pytest.approx(Anorm1, 1.0e-12)
-    b1 = dolfin.fem.assemble_vector_nest(L_block, a_block, [bc])
+
+    b1 = dolfin.fem.assemble.assemble_vector_nest(L_block)
+    dolfin.fem.assemble.apply_lifting_nest(b1, a_block, [bc])
+    for b_sub in b1.getNestSubVecs():
+        b_sub.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    bcs0 = dolfin.cpp.fem.bcs_rows(dolfin.fem.assemble._create_cpp_form(L_block), [bc])
+    dolfin.fem.assemble.set_bc_nest(b1, bcs0)
+    b1.assemble()
+
     bnorm1 = math.sqrt(sum([x.norm()**2 for x in b1.getNestSubVecs()]))
     assert bnorm0 == pytest.approx(bnorm1, 1.0e-12)
 
@@ -282,6 +292,7 @@ def test_assembly_solve_block():
     A0 = dolfin.fem.assemble_matrix_block([[a00, a01], [a10, a11]], bcs)
     b0 = dolfin.fem.assemble_vector_block([L0, L1], [[a00, a01], [a10, a11]],
                                           bcs)
+    A0.assemble()
     A0norm = A0.norm()
     b0norm = b0.norm()
     x0 = A0.createVecLeft()
@@ -297,8 +308,15 @@ def test_assembly_solve_block():
 
     # Nested (MatNest)
     A1 = dolfin.fem.assemble_matrix_nest([[a00, a01], [a10, a11]], bcs)
-    b1 = dolfin.fem.assemble_vector_nest([L0, L1], [[a00, a01], [a10, a11]],
-                                         bcs)
+    A1.assemble()
+    b1 = dolfin.fem.assemble.assemble_vector_nest([L0, L1])
+    dolfin.fem.assemble.apply_lifting_nest(b1, [[a00, a01], [a10, a11]], bcs)
+    for b_sub in b1.getNestSubVecs():
+        b_sub.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    bcs0 = dolfin.cpp.fem.bcs_rows(dolfin.fem.assemble._create_cpp_form([L0, L1]), bcs)
+    dolfin.fem.assemble.set_bc_nest(b1, bcs0)
+    b1.assemble()
+
     b1norm = b1.norm()
     assert b1norm == pytest.approx(b0norm, 1.0e-12)
     A1norm = nest_matrix_norm(A1)
@@ -408,14 +426,21 @@ def test_assembly_solve_taylor_hood(mesh):
     L0 = ufl.inner(f, v) * dx
     L1 = ufl.inner(p_zero, q) * dx
 
-    # -- Blocked and nested
+    # -- Blocked (nested)
 
     A0 = dolfin.fem.assemble_matrix_nest([[a00, a01], [a10, a11]], [bc0, bc1])
+    A0.assemble()
     A0norm = nest_matrix_norm(A0)
     P0 = dolfin.fem.assemble_matrix_nest([[p00, p01], [p10, p11]], [bc0, bc1])
+    P0.assemble()
     P0norm = nest_matrix_norm(P0)
-    b0 = dolfin.fem.assemble_vector_nest([L0, L1], [[a00, a01], [a10, a11]],
-                                         [bc0, bc1])
+    b0 = dolfin.fem.assemble.assemble_vector_nest([L0, L1])
+    dolfin.fem.assemble.apply_lifting_nest(b0, [[a00, a01], [a10, a11]], [bc0, bc1])
+    for b_sub in b0.getNestSubVecs():
+        b_sub.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    bcs0 = dolfin.cpp.fem.bcs_rows(dolfin.fem.assemble._create_cpp_form([L0, L1]), [bc0, bc1])
+    dolfin.fem.assemble.set_bc_nest(b0, bcs0)
+    b0.assemble()
     b0norm = b0.norm()
 
     ksp = PETSc.KSP()
@@ -443,14 +468,18 @@ def test_assembly_solve_taylor_hood(mesh):
     ksp.solve(b0, x0)
     assert ksp.getConvergedReason() > 0
 
-    # -- Blocked and monolithic
+    # -- Blocked (monolithic)
 
     A1 = dolfin.fem.assemble_matrix_block([[a00, a01], [a10, a11]], [bc0, bc1])
+    A1.assemble()
     assert A1.norm() == pytest.approx(A0norm, 1.0e-12)
     P1 = dolfin.fem.assemble_matrix_block([[p00, p01], [p10, p11]], [bc0, bc1])
+    P1.assemble()
     assert P1.norm() == pytest.approx(P0norm, 1.0e-12)
+
     b1 = dolfin.fem.assemble_vector_block([L0, L1], [[a00, a01], [a10, a11]],
                                           [bc0, bc1])
+
     assert b1.norm() == pytest.approx(b0norm, 1.0e-12)
 
     ksp = PETSc.KSP()

@@ -27,7 +27,7 @@ public:
 
   void form(Vec x) final
   {
-    la::PETScVector _x(x);
+    la::PETScVector _x(x, true);
     _x.update_ghosts();
   }
 
@@ -53,6 +53,7 @@ public:
   {
     MatZeroEntries(_matA.mat());
     assemble_matrix(_matA.mat(), *_j, _bcs);
+    add_diagonal(_matA.mat(), *_j->function_space(0), _bcs);
     _matA.apply(la::PETScMatrix::AssemblyType::FINAL);
     return _matA.mat();
   }
