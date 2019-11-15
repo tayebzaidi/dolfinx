@@ -49,18 +49,13 @@ from .fem.form import Form
 from .fem.dirichletbc import DirichletBC
 from .fem.solving import solve
 
-from .functionspace import (FunctionSpace, VectorFunctionSpace,
-                            TensorFunctionSpace)
-from .function import Function
-from .constant import Constant
-from .function import (TestFunction, TrialFunction, TestFunctions,
-                       TrialFunctions)
+from .function import (FunctionSpace, VectorFunctionSpace,
+                       TensorFunctionSpace, Constant, Function)
 from .specialfunctions import (FacetNormal, CellVolume, CellNormal,
                                CellDiameter, Circumradius)
 
 from .mesh import MeshFunction
 from .mesh import MeshValueCollection
-
 
 # Initialise PETSc
 from dolfin import cpp

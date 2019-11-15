@@ -17,7 +17,7 @@ using namespace dolfin::la;
 //-----------------------------------------------------------------------------
 SparsityPattern::SparsityPattern(
     MPI_Comm comm,
-    const std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps)
+    const std::array<std::shared_ptr<const common::IndexMap>, 2>& index_maps)
     : _mpi_comm(comm), _index_maps(index_maps)
 {
   const std::size_t local_size0
@@ -28,7 +28,7 @@ SparsityPattern::SparsityPattern(
 //-----------------------------------------------------------------------------
 SparsityPattern::SparsityPattern(
     MPI_Comm comm,
-    const std::vector<std::vector<const SparsityPattern*>> patterns)
+    const std::vector<std::vector<const SparsityPattern*>>& patterns)
     : _mpi_comm(comm)
 {
   // FIXME: - Add range/bound checks for each block
@@ -387,7 +387,7 @@ void SparsityPattern::assemble()
     assert(_non_local.size() % 2 == 0);
     std::vector<std::vector<std::size_t>> non_local_send(num_processes);
 
-    const Eigen::Array<std::int32_t, Eigen::Dynamic, 1>& off_process_owner
+    const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> off_process_owner
         = _index_maps[0]->ghost_owners();
 
     // Get local-to-global for unowned blocks
