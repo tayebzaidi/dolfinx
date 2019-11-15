@@ -423,7 +423,7 @@ std::size_t Mesh::create_entities(int dim) const
   // Reorder so that ghosts appear at the end, and fix the ghosting
   int mpi_rank = MPI::rank(mpi_comm());
   std::vector<int> remap(num_entities(dim));
-  std::map<std::int32_t, std::set<std::int32_t>>& shared_entities
+  const std::map<std::int32_t, std::set<std::int32_t>>& shared_entities
       = _topology->shared_entities(dim);
 
   std::vector<int> ghost_owner;
@@ -487,7 +487,7 @@ std::size_t Mesh::create_entities(int dim) const
   std::map<std::int32_t, std::set<std::int32_t>> rm_shared_entities;
   for (auto& it : _topology->shared_entities(dim))
     rm_shared_entities.insert({remap[it.first], it.second});
-  _topology->shared_entities(dim) = rm_shared_entities;
+  _topology->set_shared_entities(dim, rm_shared_entities);
 
   // Remap global indices
   std::vector<std::int64_t> gi(_topology->global_indices(dim));
@@ -497,7 +497,7 @@ std::size_t Mesh::create_entities(int dim) const
 
   // Set up ghosting data
   _topology->init_ghost(dim, num_entities(dim) - ghost_owner.size());
-  _topology->entity_owner(dim) = ghost_owner;
+  _topology->set_entity_owner(dim, ghost_owner);
 
   return _topology->size(dim);
 }
