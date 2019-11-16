@@ -15,6 +15,7 @@
 #include "dolfin/graph/Graph.h"
 #include "dolfin/graph/SCOTCH.h"
 #include <Eigen/Dense>
+#include <algorithm>
 #include <complex>
 #include <dolfin/common/log.h>
 
@@ -24,6 +25,29 @@ using namespace dolfin::mesh;
 //-----------------------------------------------------------------------------
 namespace
 {
+
+std::vector<int> sort_by_perm(
+    const Eigen::Ref<const Eigen::Array<std::int64_t, Eigen::Dynamic,
+                                        Eigen::Dynamic, Eigen::RowMajor>>&
+        arr_data)
+{
+  // Sort an Eigen::Array by creating a permutation vector
+  std::vector<int> index(arr_data.rows());
+  std::iota(index.begin(), index.end(), 0);
+
+  // Lambda with capture for sort comparison
+  const auto cmp = [&arr_data](int a, int b) {
+    const auto row_a = arr_data.row(a).data();
+    const auto row_b = arr_data.row(b).data();
+    const int cols = arr_data.cols();
+    return std::lexicographical_compare(row_a, row_a + cols, row_b,
+                                        row_b + cols);
+  };
+
+  std::sort(index.begin(), index.end(), cmp);
+  return index;
+}
+
 std::tuple<std::vector<std::int64_t>,
            std::map<std::int32_t, std::set<std::int32_t>>, std::size_t>
 compute_entity_numbering(const Mesh& mesh, int d)
