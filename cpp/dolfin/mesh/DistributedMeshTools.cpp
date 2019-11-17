@@ -26,7 +26,30 @@ using namespace dolfin::mesh;
 //-----------------------------------------------------------------------------
 namespace
 {
+//-----------------------------------------------------------------------------
+std::vector<int> count_of_n(const std::vector<int>& vec, int n)
+{
+  // Find any indices in (sorted) vector vec which are repeated n times
+  std::vector<int> saved;
+  if (vec.empty())
+    return saved;
 
+  int count = 0;
+  int p_last = vec[0];
+  for (int p : vec)
+  {
+    if (p != p_last)
+    {
+      if (count == n)
+        saved.push_back(p_last);
+      count = 0;
+    }
+    ++count;
+    p_last = p;
+  }
+  return saved;
+}
+//-----------------------------------------------------------------------------
 std::vector<int> sort_by_perm(
     const Eigen::Ref<const Eigen::Array<std::int32_t, Eigen::Dynamic,
                                         Eigen::Dynamic, Eigen::RowMajor>>&
@@ -48,14 +71,36 @@ std::vector<int> sort_by_perm(
   std::sort(index.begin(), index.end(), cmp);
   return index;
 }
+//-----------------------------------------------------------------------------
+std::vector<int> sort_by_perm(
+    const Eigen::Ref<const Eigen::Array<std::int64_t, Eigen::Dynamic,
+                                        Eigen::Dynamic, Eigen::RowMajor>>&
+        arr_data)
+{
+  // Sort an Eigen::Array by creating a permutation vector
+  std::vector<int> index(arr_data.rows());
+  std::iota(index.begin(), index.end(), 0);
 
+  // Lambda with capture for sort comparison
+  const auto cmp = [&arr_data](int a, int b) {
+    const auto row_a = arr_data.row(a).data();
+    const auto row_b = arr_data.row(b).data();
+    const int cols = arr_data.cols();
+    return std::lexicographical_compare(row_a, row_a + cols, row_b,
+                                        row_b + cols);
+  };
+
+  std::sort(index.begin(), index.end(), cmp);
+  return index;
+}
+//-----------------------------------------------------------------------------
 std::tuple<std::vector<std::int64_t>,
            std::map<std::int32_t, std::set<std::int32_t>>, std::size_t>
 compute_entity_numbering(const Mesh& mesh, int d)
 {
-  LOG(INFO)
-      << "Number mesh entities for distributed mesh (for specified vertex ids)."
-      << d;
+  LOG(INFO) << "Number mesh entities for distributed mesh (for specified "
+               "vertex ids)."
+            << d;
   common::Timer timer(
       "Number mesh entities for distributed mesh (for specified vertex ids)");
 
@@ -139,7 +184,8 @@ compute_entity_numbering(const Mesh& mesh, int d)
 
       if (may_be_shared)
       {
-        // Get the set of processes which share all the vertices of this entity
+        // Get the set of processes which share all the vertices of this
+        // entity
 
         // First vertex, and its sharing processes
         const std::set<std::int32_t>& shared_vertices_v0
@@ -195,13 +241,13 @@ compute_entity_numbering(const Mesh& mesh, int d)
 
     // Check off received entities against sent entities
     // (any which don't match need to be revised).
-    // For every shared entity that is sent to another process, the same entity
-    // should be returned. If not, it does not exist on the remote process... On
-    // the other hand, if an entity is received which has not been sent, then it
-    // can be safely ignored.
+    // For every shared entity that is sent to another process, the same
+    // entity should be returned. If not, it does not exist on the remote
+    // process... On the other hand, if an entity is received which has not
+    // been sent, then it can be safely ignored.
 
-    // Convert received data back to local index (where possible, otherwise put
-    // -1 to ignore)
+    // Convert received data back to local index (where possible, otherwise
+    // put -1 to ignore)
     for (int p = 0; p < mpi_size; ++p)
     {
       const std::vector<std::int64_t>& recv_p = recv_entities[p];
@@ -417,6 +463,19 @@ void DistributedMeshTools::number_entities(const Mesh& mesh, int d)
   common::Timer timer("Number distributed mesh entities");
   common::Timer timer2("Create entities II: " + std::to_string(d));
 
+  // Get vertex global indices
+  const std::vector<std::int64_t>& global_vertex_indices
+      = mesh.topology().global_indices(0);
+
+  // Get shared vertices (local index, [sharing processes])
+  // already determined in Mesh distribution
+  const std::map<std::int32_t, std::set<std::int32_t>>& shared_vertices_local
+      = mesh.topology().shared_entities(0);
+
+  std::vector<bool> vertex_shared(mesh.num_entities(0), false);
+  for (const auto& v : shared_vertices_local)
+    vertex_shared[v.first] = true;
+
   const int num_entities = mesh::cell_num_entities(mesh.cell_type(), d);
   const int num_vertices
       = mesh::num_cell_vertices(mesh::cell_entity_type(mesh.cell_type(), d));
@@ -465,23 +524,99 @@ void DistributedMeshTools::number_entities(const Mesh& mesh, int d)
   std::int32_t ei = 0;
   int last = sort_perm[0];
   entity_id[last] = 0;
+  std::vector<std::int32_t> entity_verts(entity_list.row(last).data(),
+                                         entity_list.row(last).data()
+                                             + entity_list.cols());
+  entity_verts.reserve(entity_list.rows() * entity_list.cols());
+
+  const int mpi_size = MPI::size(mesh.mpi_comm());
+  std::vector<std::vector<std::int64_t>> send_entities(mpi_size);
+  std::vector<std::vector<std::int64_t>> recv_entities(mpi_size);
   for (std::size_t i = 1; i < sort_perm.size(); ++i)
   {
     int curr = sort_perm[i];
-    if (not(entity_list.row(curr) == entity_list.row(last)).all())
+    if ((entity_list.row(curr) != entity_list.row(last)).any())
+    {
       ++ei;
+      bool may_be_shared = true;
+      for (int j = 0; j < num_vertices; ++j)
+      {
+        entity_verts.push_back(entity_list(curr, j));
+        may_be_shared &= vertex_shared[entity_list(curr, j)];
+      }
+      if (may_be_shared)
+      {
+        const auto v = entity_list.row(curr);
+
+        std::vector<int> sharing_processes;
+        for (int j = 0; j < num_vertices; ++j)
+        {
+          for (int p : shared_vertices_local.find(v[j])->second)
+            sharing_processes.push_back(p);
+        }
+        std::sort(sharing_processes.begin(), sharing_processes.end());
+        std::vector<int> saved_procs
+            = count_of_n(sharing_processes, num_vertices);
+
+        if (!saved_procs.empty())
+        {
+          // If there are still processes that share all the vertices,
+          // send the entity to the sharing processes.
+
+          // Sort global vertex indices into order
+          std::vector<std::int64_t> g_index;
+          for (int i = 0; i < num_vertices; ++i)
+            g_index.push_back(global_vertex_indices[v[i]]);
+          std::sort(g_index.begin(), g_index.end());
+
+          // Send all possible entities to remote processes
+          for (int p : saved_procs)
+          {
+            send_entities[p].insert(send_entities[p].end(), g_index.begin(),
+                                    g_index.end());
+          }
+        }
+      }
+    }
     entity_id[curr] = ei;
     last = curr;
   }
 
-  // Pull out vertices
-  Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-      connectivity_ev(ei + 1, num_vertices);
-  for (std::size_t i = 0; i < sort_perm.size(); ++i)
+  dolfin::MPI::all_to_all(mesh.mpi_comm(), send_entities, recv_entities);
+
+  for (int p = 0; p < mpi_size; ++p)
   {
-    const int row = entity_id[sort_perm[i]];
-    connectivity_ev.row(row) = entity_list.row(i);
+    std::vector<std::int64_t> send_recv_entities(send_entities[p].begin(),
+                                                 send_entities[p].end());
+    send_recv_entities.insert(send_recv_entities.end(),
+                              recv_entities[p].begin(), recv_entities[p].end());
+    Eigen::Map<Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic,
+                            Eigen::RowMajor>>
+        send_recv_array(send_recv_entities.data(),
+                        send_recv_entities.size() / num_vertices, num_vertices);
+
+    std::vector<int> send_recv_sort = sort_by_perm(send_recv_array);
+    int last = send_recv_sort[0];
+    for (std::size_t i = 1; i < send_recv_sort.size(); ++i)
+    {
+      int curr = send_recv_sort[i];
+      if ((send_recv_array.row(curr) == send_recv_array.row(last)).all())
+      {
+        // Shared entity with process p
+      }
+      last = curr;
+    }
   }
+
+  // Pull out vertices
+  //  Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic,
+  //  Eigen::RowMajor>
+  //      connectivity_ev(ei + 1, num_vertices);
+  //  for (std::size_t i = 0; i < sort_perm.size(); ++i)
+  //  {
+  //    const int row = entity_id[sort_perm[i]];
+  //    connectivity_ev.row(row) = entity_list.row(i);
+  //  }
 
   timer2.stop();
 
