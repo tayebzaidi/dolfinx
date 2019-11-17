@@ -204,8 +204,6 @@ compute_entities_by_key_matching(const Mesh& mesh, int dim)
     connectivity_ce(cell_index, local_index) = e_index;
   }
 
-  // FIXME: move this out some Mesh can be const
-
   // Set cell-entity connectivity
   auto ce = std::make_shared<Connectivity>(connectivity_ce);
   auto ev = std::make_shared<Connectivity>(connectivity_ev);

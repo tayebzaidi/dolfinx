@@ -10,6 +10,7 @@
 #include "MeshFunction.h"
 #include "MeshIterator.h"
 #include "cell_types.h"
+#include "dolfin/common/IndexMap.h"
 #include "dolfin/common/MPI.h"
 #include "dolfin/common/Timer.h"
 #include "dolfin/graph/Graph.h"
@@ -27,7 +28,7 @@ namespace
 {
 
 std::vector<int> sort_by_perm(
-    const Eigen::Ref<const Eigen::Array<std::int64_t, Eigen::Dynamic,
+    const Eigen::Ref<const Eigen::Array<std::int32_t, Eigen::Dynamic,
                                         Eigen::Dynamic, Eigen::RowMajor>>&
         arr_data)
 {
@@ -414,6 +415,78 @@ reorder_values_by_global_indices(
 void DistributedMeshTools::number_entities(const Mesh& mesh, int d)
 {
   common::Timer timer("Number distributed mesh entities");
+  common::Timer timer2("Create entities II: " + std::to_string(d));
+
+  const int num_entities = mesh::cell_num_entities(mesh.cell_type(), d);
+  const int num_vertices
+      = mesh::num_cell_vertices(mesh::cell_entity_type(mesh.cell_type(), d));
+
+  // Create map from cell vertices to entity vertices
+  Eigen::Array<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> e_vertices
+      = mesh::get_entity_vertices(mesh.cell_type(), d);
+  assert(e_vertices.rows() == num_entities);
+  assert(e_vertices.cols() == num_vertices);
+
+  const int tdim = mesh.topology().dim();
+  // List of all entities (by vertex index), including repeated entries
+  Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      entity_list(num_entities * mesh.num_entities(tdim), num_vertices);
+
+  int k = 0;
+  for (auto& c : MeshRange(mesh, tdim, MeshRangeType::ALL))
+  {
+    // Get vertices from cell
+    const std::int32_t* vertices = c.entities(0);
+    assert(vertices);
+
+    // Iterate over entities of cell
+    for (int i = 0; i < num_entities; ++i)
+    {
+      // Get entity vertices
+      for (int j = 0; j < num_vertices; ++j)
+        entity_list(k, j) = vertices[e_vertices(i, j)];
+
+      std::sort(entity_list.row(k).data(),
+                entity_list.row(k).data() + num_vertices);
+      ++k;
+    }
+  }
+  assert(k == entity_list.rows());
+
+  // Sort the list
+  std::vector<int> sort_perm = sort_by_perm(entity_list);
+
+  std::vector<std::int32_t> entity_id(entity_list.rows());
+  Eigen::Map<Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic,
+                          Eigen::RowMajor>>
+      connectivity_ce(entity_id.data(), mesh.num_entities(tdim), num_entities);
+
+  // Find unique entries, and number them
+  std::int32_t ei = 0;
+  int last = sort_perm[0];
+  entity_id[last] = 0;
+  for (std::size_t i = 1; i < sort_perm.size(); ++i)
+  {
+    int curr = sort_perm[i];
+    if (not(entity_list.row(curr) == entity_list.row(last)).all())
+      ++ei;
+    entity_id[curr] = ei;
+    last = curr;
+  }
+
+  // Pull out vertices
+  Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+      connectivity_ev(ei + 1, num_vertices);
+  for (std::size_t i = 0; i < sort_perm.size(); ++i)
+  {
+    const int row = entity_id[sort_perm[i]];
+    connectivity_ev.row(row) = entity_list.row(i);
+  }
+
+  timer2.stop();
+
+  std::cout << "Found " << (ei + 1) << " unique entities of dimension " << d
+            << "\n";
 
   // Return if global entity indices have already been calculated
   if (mesh.topology().global_indices(d).size() > 0)
