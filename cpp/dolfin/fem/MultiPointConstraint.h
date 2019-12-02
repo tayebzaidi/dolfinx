@@ -26,6 +26,11 @@ namespace fem
   {
 
   public:
+  /// Create multipointconstraint
+  ///
+  /// @param[in] V The functionspace on which the multipoint constraint
+  /// condition is applied
+  /// @param[in] master_slave_map Mapping specifying the relationship between a master and a slave node.
 	MultiPointConstraint(std::shared_ptr<const function::FunctionSpace> V,  std::unordered_map<std::size_t, std::size_t> master_slave_map);
   private:
 	std::shared_ptr<const function::FunctionSpace> _function_space;
