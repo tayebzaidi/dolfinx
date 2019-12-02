@@ -47,5 +47,12 @@ public:
   static void exterior_facets(la::SparsityPattern& pattern,
                               const mesh::Mesh& mesh,
                               const std::array<const fem::DofMap*, 2> dofmaps);
+
+  // Iterate over the master-slave cells and insert entries into sparsity pattern
+  static void MultiPointConstraint(la::SparsityPattern& pattern,
+								   const mesh::Mesh& mesh,
+								   const std::array<const fem::DofMap*, 2> dofmaps,
+								   fem::MultiPointConstraint& mpc);
+};
 } // namespace fem
 } // namespace dolfin
