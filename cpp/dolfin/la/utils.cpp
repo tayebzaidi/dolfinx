@@ -86,7 +86,7 @@ Mat dolfin::la::create_petsc_matrix(
   if (ierr != 0)
     petsc_error(ierr, __FILE__, "MatCreate");
 
-  // Get IndexMaps from sparsity patterm, and block size
+  // Get IndexMaps from sparsity pattern, and block size
   std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps
       = {{sparsity_pattern.index_map(0), sparsity_pattern.index_map(1)}};
   const int bs0 = index_maps[0]->block_size;

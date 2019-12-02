@@ -16,6 +16,7 @@ set(HEADERS
   Form.h
   FormCoefficients.h
   FormIntegrals.h
+  MultiPointConstraint.h
   PETScDMCollection.h
   ReferenceCellGeometry.h
   SparsityPatternBuilder.h
@@ -38,6 +39,7 @@ set(SOURCES
   Form.cpp
   FormCoefficients.cpp
   FormIntegrals.cpp
+  MultiPointConstraint.cpp
   PETScDMCollection.cpp
   ReferenceCellGeometry.cpp
   SparsityPatternBuilder.cpp

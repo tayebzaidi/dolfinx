@@ -13,6 +13,7 @@ namespace dolfin
 
 #include <dolfin/fem/CoordinateElement.h>
 #include <dolfin/fem/DirichletBC.h>
+#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/fem/DiscreteOperators.h>
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/fem/FiniteElement.h>

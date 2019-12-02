@@ -8,6 +8,7 @@
 #include <dolfin/common/IndexMap.h>
 #include <dolfin/common/MPI.h>
 #include <dolfin/fem/DofMap.h>
+#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/la/SparsityPattern.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshEntity.h>
@@ -103,5 +104,13 @@ void SparsityPatternBuilder::exterior_facets(
     pattern.insert_local(dofmaps[0]->cell_dofs(cell.index()),
                          dofmaps[1]->cell_dofs(cell.index()));
   }
+}
+//-----------------------------------------------------------------------------
+void SparsityPatternBuilder::MultiPointConstraint(
+    la::SparsityPattern& pattern, const mesh::Mesh& mesh,
+    const std::array<const fem::DofMap*, 2> dofmaps,
+    fem::MultiPointConstraint& mpc)
+{
+  std::cout << "Here";
 }
 //-----------------------------------------------------------------------------
