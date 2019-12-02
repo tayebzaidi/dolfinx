@@ -27,6 +27,10 @@ namespace fem
 
   public:
 	MultiPointConstraint(std::shared_ptr<const function::FunctionSpace> V,  std::unordered_map<std::size_t, std::size_t> master_slave_map);
-  };
+  private:
+	std::shared_ptr<const function::FunctionSpace> _function_space;
+	const std::unordered_map<std::size_t, std::size_t> _master_slave_map;
+   };
+
 }
 }

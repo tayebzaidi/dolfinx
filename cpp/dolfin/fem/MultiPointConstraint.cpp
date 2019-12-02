@@ -13,6 +13,6 @@ using namespace dolfin::fem;
 MultiPointConstraint::MultiPointConstraint(
     std::shared_ptr<const function::FunctionSpace> V,
     std::unordered_map<std::size_t, std::size_t> master_slave_map)
+    : _function_space(V), _master_slave_map(master_slave_map)
 {
-  std::cout << "there";
 }

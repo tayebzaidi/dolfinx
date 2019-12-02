@@ -1,6 +1,7 @@
 from dolfin import cpp, function
 import typing
 
+
 class MultiPointConstraint(cpp.fem.MultiPointConstraint):
     def __init__(
             self,
