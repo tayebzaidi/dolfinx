@@ -94,7 +94,7 @@ public:
 
   /// Tabulate the reference coordinates of all dofs on an element
   /// @return The coordinates of all dofs on the reference cell
-  const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
+  Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
   dof_reference_coordinates() const;
 
   /// Map values of field from physical to reference space which has
@@ -127,6 +127,9 @@ private:
 
   // Dof coordinates on the reference element
   Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> _refX;
+
+  // Indices
+  std::vector<int> _refXi;
 
   // List of sub-elements (if any)
   std::vector<std::shared_ptr<const FiniteElement>> _sub_elements;

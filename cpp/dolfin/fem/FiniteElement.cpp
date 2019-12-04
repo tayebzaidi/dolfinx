@@ -8,6 +8,7 @@
 #include <dolfin/common/log.h>
 #include <dolfin/mesh/utils.h>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <ufc.h>
 
@@ -29,14 +30,22 @@ FiniteElement::FiniteElement(const ufc_finite_element& ufc_element)
           ufc_element.transform_reference_basis_derivatives),
       _transform_values(ufc_element.transform_values)
 {
-  // Store dof coordinates on reference element
-  assert(ufc_element.tabulate_reference_dof_coordinates);
-  _refX.resize(_space_dim, _tdim);
-  if (ufc_element.tabulate_reference_dof_coordinates(_refX.data()) == -1)
+  // Store unique dof coordinates on reference element
+  _refXi.resize(_space_dim);
+  assert(ufc_element.reference_dof_point_indices);
+  const int* refXi = ufc_element.reference_dof_point_indices();
+  if (!refXi)
   {
     throw std::runtime_error(
-        "Generated code returned error in tabulate_reference_dof_coordinates");
+        "Generated code returned error in reference_dof_point_indices");
   }
+  std::copy(refXi, refXi + _space_dim, _refXi.begin());
+  int max_index = *std::max_element(_refXi.begin(), _refXi.end());
+  std::cout << "Max index = " << max_index << "\n";
+
+  _refX.resize(max_index + 1, _tdim);
+  const double* refX = ufc_element.reference_dof_points();
+  std::copy(refX, refX + _refX.rows() * _refX.cols(), _refX.data());
 
   const ufc_shape _shape = ufc_element.cell_shape;
   switch (_shape)
@@ -161,10 +170,15 @@ void FiniteElement::transform_reference_basis_derivatives(
   }
 }
 //-----------------------------------------------------------------------------
-const Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>&
+Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
 FiniteElement::dof_reference_coordinates() const
 {
-  return _refX;
+  Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> refX(
+      _refXi.size(), _refX.cols());
+  for (std::size_t i = 0; i < _refXi.size(); ++i)
+    refX.row(i) = _refX.row(_refXi[i]);
+
+  return refX;
 }
 //-----------------------------------------------------------------------------
 void FiniteElement::transform_values(
