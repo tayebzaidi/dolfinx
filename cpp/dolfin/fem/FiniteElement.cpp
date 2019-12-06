@@ -8,6 +8,7 @@
 #include <dolfin/common/log.h>
 #include <dolfin/mesh/utils.h>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <ufc.h>
 
@@ -37,6 +38,18 @@ FiniteElement::FiniteElement(const ufc_finite_element& ufc_element)
     throw std::runtime_error(
         "Generated code returned error in tabulate_reference_dof_coordinates");
   }
+
+  // Extract block structure
+  const int* bs = ufc_element.block_structure();
+  std::vector<int> bsvec(bs + 1, bs + 1 + *bs);
+  for (auto q = bsvec.begin(); q < bsvec.end(); q += *q + 1)
+  {
+    std::cout << "rank=" << *q << " (";
+    for (int i = 0; i < *q; ++i)
+      std::cout << q[i + 1] << " ";
+    std::cout << "),";
+  }
+  std::cout << "\n";
 
   const ufc_shape _shape = ufc_element.cell_shape;
   switch (_shape)
