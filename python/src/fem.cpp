@@ -166,6 +166,16 @@ void fem(py::module& m)
       py::return_value_policy::take_ownership,
       "Create monolithic sparse matrix for stacked bilinear forms.");
   m.def(
+      "create_matrix_mpc",
+      [](const dolfin::fem::Form& a, dolfin::fem::MultiPointConstraint& mpc) {
+        auto A = dolfin::fem::create_matrix_mpc(a, mpc);
+        Mat _A = A.mat();
+        PetscObjectReference((PetscObject)_A);
+        return _A;
+      },
+      py::return_value_policy::take_ownership,
+      "Create a PETSc Mat for bilinear form with multi point constraints.");
+  m.def(
       "create_matrix_nest",
       [](const std::vector<std::vector<const dolfin::fem::Form*>>& a) {
         dolfin::la::PETScMatrix A
