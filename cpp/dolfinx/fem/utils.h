@@ -69,6 +69,10 @@ la::PETScMatrix create_matrix_block(
     const Eigen::Ref<const Eigen::Array<const fem::Form*, Eigen::Dynamic,
                                         Eigen::Dynamic, Eigen::RowMajor>>& a);
 
+/// Create matrix for a MultiPointConstraintProblem. Matrix is not zeroed.
+la::PETScMatrix create_matrix_mpc(
+    const Form& a, fem::MultiPointConstraint& mpc);
+
 /// Create nested (MatNest) matrix. Matrix is not zeroed.
 la::PETScMatrix create_matrix_nest(
     const Eigen::Ref<const Eigen::Array<const fem::Form*, Eigen::Dynamic,
