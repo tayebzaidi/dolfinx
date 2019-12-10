@@ -11,6 +11,7 @@
 #include <petscmat.h>
 #include <petscsys.h>
 #include <vector>
+#include <memory>
 
 namespace dolfinx
 {
@@ -29,6 +30,7 @@ namespace fem
 {
 class Form;
 class DofMap;
+class MultiPointConstraint;
 
 namespace impl
 {
@@ -38,7 +40,8 @@ namespace impl
 /// local indices. Rows (bc0) and columns (bc1) with Dirichlet
 /// conditions are zeroed. Markers (bc0 and bc1) can be empty if not bcs
 /// are applied. Matrix is not finalised.
-void assemble_matrix(Mat A, const Form& a, const std::vector<bool>& bc0,
+  void assemble_matrix(Mat A, const Form& a, const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+					   const std::vector<bool>& bc0,
                      const std::vector<bool>& bc1);
 
 /// Execute kernel over cells and accumulate result in Mat
@@ -48,7 +51,9 @@ void assemble_cells(
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap0,
     int num_dofs_per_cell0,
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap1,
-    int num_dofs_per_cell1, const std::vector<bool>& bc0,
+    int num_dofs_per_cell1,
+	const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+	const std::vector<bool>& bc0,
     const std::vector<bool>& bc1,
     const std::function<void(PetscScalar*, const PetscScalar*,
                              const PetscScalar*, const double*, const int*,

@@ -315,6 +315,9 @@ la::PETScMatrix dolfin::fem::create_matrix_mpc(const Form& a,
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
     SparsityPatternBuilder::exterior_facets(pattern, mesh,
                                             {{dofmaps[0], dofmaps[1]}});
+  if (mpc.slave_to_master().size() > 0)
+    SparsityPatternBuilder::MultiPointConstraint(
+        pattern, mesh, {{dofmaps[0], dofmaps[1]}}, mpc);
   pattern.assemble();
   t0.stop();
 
@@ -342,7 +345,6 @@ la::PETScMatrix dolfin::fem::create_matrix_mpc(const Form& a,
 
     A.apply(la::PETScMatrix::AssemblyType::FLUSH);
   }
-
   return A;
 }
 //-----------------------------------------------------------------------------

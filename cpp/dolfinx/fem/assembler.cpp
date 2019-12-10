@@ -8,6 +8,7 @@
 #include "DirichletBC.h"
 #include "DofMap.h"
 #include "Form.h"
+#include "MultiPointConstraint.h"
 #include "assemble_matrix_impl.h"
 #include "assemble_scalar_impl.h"
 #include "assemble_vector_impl.h"
@@ -81,6 +82,7 @@ void fem::apply_lifting(
 //-----------------------------------------------------------------------------
 void fem::assemble_matrix(
     Mat A, const Form& a,
+    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
     const std::vector<std::shared_ptr<const DirichletBC>>& bcs)
 {
   // Index maps for dof ranges
@@ -110,13 +112,15 @@ void fem::assemble_matrix(
   }
 
   // Assemble
-  impl::assemble_matrix(A, a, dof_marker0, dof_marker1);
+  impl::assemble_matrix(A, a, mpc, dof_marker0, dof_marker1);
 }
 //-----------------------------------------------------------------------------
-void fem::assemble_matrix(Mat A, const Form& a, const std::vector<bool>& bc0,
-                          const std::vector<bool>& bc1)
+void fem::assemble_matrix(
+    Mat A, const Form& a,
+    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+    const std::vector<bool>& bc0, const std::vector<bool>& bc1)
 {
-  impl::assemble_matrix(A, a, bc0, bc1);
+  impl::assemble_matrix(A, a, mpc, bc0, bc1);
 }
 //-----------------------------------------------------------------------------
 void fem::add_diagonal(
