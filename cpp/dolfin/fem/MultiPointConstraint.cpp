@@ -12,7 +12,14 @@ using namespace dolfin::fem;
 
 MultiPointConstraint::MultiPointConstraint(
     std::shared_ptr<const function::FunctionSpace> V,
-    std::unordered_map<std::size_t, std::size_t> master_slave_map)
-    : _function_space(V), _master_slave_map(master_slave_map)
+    std::unordered_map<std::size_t, std::size_t> slave_to_master)
+    : _function_space(V), _slave_to_master(slave_to_master)
 {
+}
+
+/// Slave to master map
+std::unordered_map<std::size_t, std::size_t>
+MultiPointConstraint::slave_to_master() const
+{
+  return _slave_to_master;
 }

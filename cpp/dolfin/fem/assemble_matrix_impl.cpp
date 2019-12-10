@@ -8,6 +8,7 @@
 #include "DofMap.h"
 #include "Form.h"
 #include "utils.h"
+#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/function/Constant.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -17,14 +18,16 @@
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshEntity.h>
 #include <dolfin/mesh/MeshIterator.h>
+#include <memory>
 #include <petscsys.h>
 
 using namespace dolfin;
 
 //-----------------------------------------------------------------------------
-void fem::impl::assemble_matrix(Mat A, const Form& a,
-                                const std::vector<bool>& bc0,
-                                const std::vector<bool>& bc1)
+void fem::impl::assemble_matrix(
+    Mat A, const Form& a,
+    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+    const std::vector<bool>& bc0, const std::vector<bool>& bc1)
 {
   assert(a.mesh());
   const mesh::Mesh& mesh = *a.mesh();
@@ -69,7 +72,7 @@ void fem::impl::assemble_matrix(Mat A, const Form& a,
         = integrals.integral_domains(type::cell, i);
     fem::impl::assemble_cells(
         A, mesh, active_cells, dof_array0, num_dofs_per_cell0, dof_array1,
-        num_dofs_per_cell1, bc0, bc1, fn, coeffs, constant_values);
+        num_dofs_per_cell1, mpc, bc0, bc1, fn, coeffs, constant_values);
   }
 
   for (int i = 0; i < integrals.num_integrals(type::exterior_facet); ++i)
@@ -100,8 +103,9 @@ void fem::impl::assemble_cells(
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap0,
     int num_dofs_per_cell0,
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap1,
-    int num_dofs_per_cell1, const std::vector<bool>& bc0,
-    const std::vector<bool>& bc1,
+    int num_dofs_per_cell1,
+    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+    const std::vector<bool>& bc0, const std::vector<bool>& bc1,
     const std::function<void(PetscScalar*, const PetscScalar*,
                              const PetscScalar*, const double*, const int*,
                              const int*)>& kernel,
@@ -129,6 +133,11 @@ void fem::impl::assemble_cells(
       coordinate_dofs(num_dofs_g, gdim);
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       Ae;
+
+  std::unordered_map<std::size_t, std::size_t> pairs;
+  // MPC constraints
+  if (!mpc.empty())
+    pairs = mpc[0]->slave_to_master();
 
   // Iterate over active cells
   PetscErrorCode ierr;
@@ -165,7 +174,35 @@ void fem::impl::assemble_cells(
           Ae.col(j).setZero();
       }
     }
-
+    if (!mpc.empty())
+    {
+      Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                    Eigen::RowMajor>
+          Ampc;
+      for (auto it = pairs.begin(); it != pairs.end(); ++it)
+      {
+        for (Eigen::Index i = 0; i < Ae.rows(); ++i)
+        {
+          const PetscInt dof = dofmap0[cell_index * num_dofs_per_cell0 + i];
+          if (it->first == unsigned(dof))
+          {
+            PetscInt n_row = 1;
+            Ampc.setZero(n_row, num_dofs_per_cell1);
+            Ampc.row(0) = Ae.row(i);
+            const PetscInt global_row = it->second;
+            ierr = MatSetValuesLocal(A, n_row, &global_row, num_dofs_per_cell1,
+                                     dofmap1.data()
+                                         + cell_index * num_dofs_per_cell1,
+                                     Ampc.data(), ADD_VALUES);
+#ifdef DEBUG
+            if (ierr != 0)
+              la::petsc_error(ierr, __FILE__, "MatSetValuesLocal");
+#endif
+            Ae.row(i).setZero();
+          }
+        }
+      }
+    }
     ierr = MatSetValuesLocal(
         A, num_dofs_per_cell0, dofmap0.data() + cell_index * num_dofs_per_cell0,
         num_dofs_per_cell1, dofmap1.data() + cell_index * num_dofs_per_cell1,

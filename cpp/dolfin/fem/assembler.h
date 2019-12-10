@@ -24,6 +24,7 @@ namespace fem
 {
 class DirichletBC;
 class Form;
+class MultiPointConstraint;
 
 // -- Scalar ----------------------------------------------------------------
 
@@ -112,7 +113,7 @@ void apply_lifting(
 ///                dofs the row and column are zeroed. The diagonal
 ///                entry is not set.
 void assemble_matrix(
-    Mat A, const Form& a,
+					 Mat A, const Form& a, const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
     const std::vector<std::shared_ptr<const DirichletBC>>& bcs);
 
 /// Assemble bilinear form into a matrix. Matrix must already be
@@ -126,8 +127,10 @@ void assemble_matrix(
 /// @param[in] bc1 Boundary condition markers for the columns. If bc[i]
 ///                is true then rows i in A will be zeroed. The index i
 ///                is a local index.
-void assemble_matrix(Mat A, const Form& a, const std::vector<bool>& bc0,
+ void assemble_matrix(Mat A, const Form& a, const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
+					 const std::vector<bool>& bc0,
                      const std::vector<bool>& bc1);
+
 
 /// Adds a value to the diagonal of the matrix for rows with a Dirichlet
 /// boundary conditions applied. This function is typically called after
