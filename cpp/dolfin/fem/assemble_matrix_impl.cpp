@@ -178,6 +178,16 @@ void fem::impl::assemble_cells(
     {
       Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
                     Eigen::RowMajor>
+          Ampc_row;
+      PetscInt global_row;
+      PetscInt n_row;
+      Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                    Eigen::RowMajor>
+          Ampc_col;
+      PetscInt global_col;
+      PetscInt n_col;
+      Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
+                    Eigen::RowMajor>
           Ampc;
       for (auto it = pairs.begin(); it != pairs.end(); ++it)
       {
@@ -186,21 +196,39 @@ void fem::impl::assemble_cells(
           const PetscInt dof = dofmap0[cell_index * num_dofs_per_cell0 + i];
           if (it->first == unsigned(dof))
           {
-            PetscInt n_row = 1;
-            Ampc.setZero(n_row, num_dofs_per_cell1);
-            Ampc.row(0) = Ae.row(i);
-            const PetscInt global_row = it->second;
-            ierr = MatSetValuesLocal(A, n_row, &global_row, num_dofs_per_cell1,
-                                     dofmap1.data()
-                                         + cell_index * num_dofs_per_cell1,
-                                     Ampc.data(), ADD_VALUES);
-#ifdef DEBUG
-            if (ierr != 0)
-              la::petsc_error(ierr, __FILE__, "MatSetValuesLocal");
-#endif
+            global_row = it->second;
+            n_row = 1;
+            Ampc_row.setZero(n_row, num_dofs_per_cell1);
+            Ampc_row.row(0) = Ae.row(i);
             Ae.row(i).setZero();
           }
         }
+        for (Eigen::Index j = 0; j < Ae.cols(); ++j)
+        {
+          const PetscInt dof = dofmap1[cell_index * num_dofs_per_cell1 + j];
+          if (it->first == unsigned(dof))
+          {
+            global_col = it->second;
+            n_col = 1;
+            Ampc_col.setZero(num_dofs_per_cell0, n_col);
+            Ampc_col.col(0) = Ae.col(j);
+            Ampc.setZero(n_row, n_col);
+            Ampc(0, 0) = Ampc_row(j) + Ampc_col(j);
+            Ampc_row.col(j).setZero();
+            Ae.col(j).setZero();
+          }
+        }
+        ierr = MatSetValuesLocal(A, n_row, &global_row, n_col, &global_col,
+                                 Ampc.data(), ADD_VALUES);
+
+        ierr = MatSetValuesLocal(A, n_row, &global_row, num_dofs_per_cell1,
+                                 dofmap1.data()
+                                     + cell_index * num_dofs_per_cell1,
+                                 Ampc_row.data(), ADD_VALUES);
+        ierr = MatSetValuesLocal(
+            A, num_dofs_per_cell0,
+            dofmap0.data() + cell_index * num_dofs_per_cell0, n_col,
+            &global_col, Ampc_col.data(), ADD_VALUES);
       }
     }
     ierr = MatSetValuesLocal(
