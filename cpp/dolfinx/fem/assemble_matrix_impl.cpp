@@ -33,6 +33,7 @@ void fem::impl::assemble_matrix(
   // Get dofmap data
   const fem::DofMap& dofmap0 = *a.function_space(0)->dofmap();
   const fem::DofMap& dofmap1 = *a.function_space(1)->dofmap();
+  // FIXME: Move this into assemble_cells, as the dofmaps are needed for MPC
   auto& dof_array0 = dofmap0.dof_array();
   auto& dof_array1 = dofmap1.dof_array();
 
@@ -190,6 +191,8 @@ void fem::impl::assemble_cells(
       {
         for (Eigen::Index i = 0; i < Ae.rows(); ++i)
         {
+          // FIXME: For parallel, one has to look up the global indices of the
+          // dof from V.dofmap.indexmap.indices
           const PetscInt dof = dofmap0[cell_index * num_dofs_per_cell0 + i];
           if (it->first == unsigned(dof))
           {
@@ -204,7 +207,6 @@ void fem::impl::assemble_cells(
         for (Eigen::Index j = 0; j < Ae.cols(); ++j)
         {
           const PetscInt dof = dofmap1[cell_index * num_dofs_per_cell1 + j];
-          std::cout << it->first << " " << dof << std::endl;
           if (it->first == unsigned(dof))
           {
             global_col = it->second;
