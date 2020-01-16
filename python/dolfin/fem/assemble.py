@@ -187,26 +187,20 @@ def _(b: PETSc.Vec,
 
 @functools.singledispatch
 def assemble_matrix(a: typing.Union[Form, cpp.fem.Form],
-                    mpcs: typing.List[MultiPointConstraint] = [],
                     bcs: typing.List[DirichletBC] = [],
                     diagonal: float = 1.0) -> PETSc.Mat:
     """Assemble bilinear form into a matrix. The returned matrix is not
     finalised, i.e. ghost values are not accumulated.
 
     """
-    if len(mpcs) == 1:
-        A = cpp.fem.create_matrix_mpc(_create_cpp_form(a), mpcs[0])
-    else:
-        assert(len(mpcs) == 0)
-        A = cpp.fem.create_matrix(_create_cpp_form(a))
+    A = cpp.fem.create_matrix(_create_cpp_form(a))
     A.zeroEntries()
-    return assemble_matrix(A, a, mpcs, bcs, diagonal)
+    return assemble_matrix(A, a, bcs, diagonal)
 
 
 @assemble_matrix.register(PETSc.Mat)
 def _(A: PETSc.Mat,
       a: typing.Union[Form, cpp.fem.Form],
-      mpcs: typing.List[MultiPointConstraint] = [],
       bcs: typing.List[DirichletBC] = [],
       diagonal: float = 1.0) -> PETSc.Mat:
     """Assemble bilinear form into a matrix. The returned matrix is not
@@ -214,7 +208,7 @@ def _(A: PETSc.Mat,
 
     """
     _a = _create_cpp_form(a)
-    cpp.fem.assemble_matrix(A, _a, mpcs, bcs)
+    cpp.fem.assemble_matrix(A, _a, bcs)
     if _a.function_space(0).id == _a.function_space(1).id:
         cpp.fem.add_diagonal(A, _a.function_space(0), bcs, diagonal)
     return A
