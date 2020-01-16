@@ -3,6 +3,8 @@
 // This file is part of DOLFINX (https://www.fenicsproject.org)
 //
 // SPDX-License-Identifier:    LGPL-3.0-or-later
+//
+// Modified by Jørgen S. Dokken 2020
 
 #include "utils.h"
 #include <Eigen/Dense>
@@ -13,7 +15,6 @@
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/DofMapBuilder.h>
 #include <dolfinx/fem/Form.h>
-#include <dolfinx/fem/MultiPointConstraint.h>
 #include <dolfinx/fem/SparsityPatternBuilder.h>
 #include <dolfinx/function/Function.h>
 #include <dolfinx/function/FunctionSpace.h>
@@ -112,15 +113,17 @@ fem::block_function_spaces(
   return V;
 }
 //-----------------------------------------------------------------------------
+<<<<<<< HEAD:cpp/dolfinx/fem/utils.cpp
 la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
+=======
+la::SparsityPattern dolfin::fem::create_sparsity_pattern(const Form& a)
+>>>>>>> Started major rewrite. NExt step is to remove c++ assembler:cpp/dolfin/fem/utils.cpp
 {
-  bool keep_diagonal = false;
   if (a.rank() != 2)
   {
     throw std::runtime_error(
         "Cannot initialise matrix. Form is not a bilinear form");
   }
-
   // Get dof maps
   std::array<const DofMap*, 2> dofmaps
       = {{a.function_space(0)->dofmap().get(),
@@ -129,8 +132,6 @@ la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
   // Get mesh
   assert(a.mesh());
   const mesh::Mesh& mesh = *(a.mesh());
-
-  common::Timer t0("Build sparsity");
 
   // Get common::IndexMaps for each dimension
   std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps
@@ -146,6 +147,15 @@ la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
     SparsityPatternBuilder::exterior_facets(pattern, mesh,
                                             {{dofmaps[0], dofmaps[1]}});
+  return pattern;
+}
+//-----------------------------------------------------------------------------
+la::PETScMatrix dolfin::fem::create_matrix(const Form& a)
+{
+  bool keep_diagonal = false;
+  la::SparsityPattern pattern = create_sparsity_pattern(a);
+
+  common::Timer t0("Build sparsity");
   pattern.assemble();
   t0.stop();
 
@@ -277,74 +287,6 @@ la::PETScMatrix fem::create_matrix_block(
   ISLocalToGlobalMappingDestroy(&petsc_local_to_global0);
   ISLocalToGlobalMappingDestroy(&petsc_local_to_global1);
 
-  return A;
-}
-//-----------------------------------------------------------------------------
-la::PETScMatrix dolfin::fem::create_matrix_mpc(const Form& a,
-                                               fem::MultiPointConstraint& mpc)
-{
-  bool keep_diagonal = false;
-  if (a.rank() != 2)
-  {
-    throw std::runtime_error(
-        "Cannot initialise matrix. Form is not a bilinear form");
-  }
-
-  // Get dof maps
-  std::array<const DofMap*, 2> dofmaps
-      = {{a.function_space(0)->dofmap().get(),
-          a.function_space(1)->dofmap().get()}};
-
-  // Get mesh
-  assert(a.mesh());
-  const mesh::Mesh& mesh = *(a.mesh());
-
-  common::Timer t0("Build sparsity");
-
-  // Get common::IndexMaps for each dimension
-  std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps
-      = {{dofmaps[0]->index_map, dofmaps[1]->index_map}};
-
-  // Create and build sparsity pattern
-  la::SparsityPattern pattern(mesh.mpi_comm(), index_maps);
-  if (a.integrals().num_integrals(fem::FormIntegrals::Type::cell) > 0)
-    SparsityPatternBuilder::cells(pattern, mesh, {{dofmaps[0], dofmaps[1]}});
-  if (a.integrals().num_integrals(fem::FormIntegrals::Type::interior_facet) > 0)
-    SparsityPatternBuilder::interior_facets(pattern, mesh,
-                                            {{dofmaps[0], dofmaps[1]}});
-  if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
-    SparsityPatternBuilder::exterior_facets(pattern, mesh,
-                                            {{dofmaps[0], dofmaps[1]}});
-  if (mpc.slave_to_master().size() > 0)
-    SparsityPatternBuilder::MultiPointConstraint(
-        pattern, mesh, {{dofmaps[0], dofmaps[1]}}, mpc);
-  pattern.assemble();
-  t0.stop();
-
-  // Initialize matrix
-  common::Timer t1("Init tensor");
-  la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
-  t1.stop();
-
-  // FIXME: Check if there is a PETSc function for this
-  // Insert zeros on the diagonal as diagonal entries may be
-  // optimised away, e.g. when calling PETScMatrix::apply.
-  if (keep_diagonal)
-  {
-    // Loop over rows and insert 0.0 on the diagonal
-    const PetscScalar block = 0.0;
-    std::array<PetscInt, 2> row_range;
-    MatGetOwnershipRange(A.mat(), &row_range[0], &row_range[1]);
-    const std::int64_t range = std::min(row_range[1], (PetscInt)A.size()[1]);
-
-    for (std::int64_t i = row_range[0]; i < range; i++)
-    {
-      const PetscInt _i = i;
-      A.set(&block, 1, &_i, 1, &_i);
-    }
-
-    A.apply(la::PETScMatrix::AssemblyType::FLUSH);
-  }
   return A;
 }
 //-----------------------------------------------------------------------------

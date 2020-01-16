@@ -7,7 +7,9 @@
 #include "MultiPointConstraint.h"
 #include <Eigen/Dense>
 #include <dolfin/fem/DofMap.h>
+#include <dolfin/fem/Form.h>
 #include <dolfin/function/FunctionSpace.h>
+#include <dolfin/la/SparsityPattern.h>
 #include <dolfin/mesh/MeshIterator.h>
 
 using namespace dolfin;
@@ -64,4 +66,58 @@ MultiPointConstraint::cell_classification()
     }
   }
   return std::pair(slaves, normals);
+}
+
+// Append to existing sparsity pattern
+std::shared_ptr<dolfin::la::SparsityPattern>
+MultiPointConstraint::generate_sparsity_pattern(
+    const Form& a, std::shared_ptr<dolfin::la::SparsityPattern> pattern)
+{
+  std::array<const DofMap*, 2> dofmaps
+      = {{a.function_space(0)->dofmap().get(),
+          a.function_space(1)->dofmap().get()}};
+  dofmaps[0];
+  dofmaps[1];
+  const std::unordered_map<std::size_t, std::size_t> pairs = _slave_to_master;
+
+  auto mesh = *_function_space->mesh();
+  const int D = mesh.topology().dim();
+  for (auto& cell : mesh::MeshRange(mesh, D))
+  {
+
+    // Master slave sparsity pattern
+    std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2> master_slave_dofs;
+    // Dofs previously owned by slave dof
+    std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2> new_master_dofs;
+
+    for (std::size_t i = 0; i < 2; i++)
+    {
+      auto cell_dof_list = dofmaps[i]->cell_dofs(cell.index());
+      new_master_dofs[i].resize(cell_dof_list.size());
+      std::copy(cell_dof_list.data(),
+                cell_dof_list.data() + cell_dof_list.size(),
+                new_master_dofs[i].data());
+      for (auto it = pairs.begin(); it != pairs.end(); ++it)
+      {
+        for (std::size_t j = 0; j < unsigned(cell_dof_list.size()); ++j)
+        {
+
+          if (it->first == unsigned(cell_dof_list[j]))
+          {
+            new_master_dofs[i](j) = it->second;
+            master_slave_dofs[i].conservativeResize(master_slave_dofs[i].size()
+                                                    + 2);
+            master_slave_dofs[i].row(master_slave_dofs[i].rows() - 1)
+                = it->first;
+            master_slave_dofs[i].row(master_slave_dofs[i].rows() - 2)
+                = it->second;
+          }
+        }
+      }
+    }
+    pattern->insert_local(new_master_dofs[0], new_master_dofs[1]);
+    pattern->insert_local(master_slave_dofs[0], master_slave_dofs[1]);
+  }
+  pattern->assemble();
+  return pattern;
 }

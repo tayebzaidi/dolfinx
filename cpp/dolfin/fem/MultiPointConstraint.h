@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Jorgen S. Dokken
+// Copyright (C) 2020 Jorgen S. Dokken
 //
 // This file is part of DOLFIN (https://www.fenicsproject.org)
 //
@@ -7,6 +7,8 @@
 #pragma once
 
 #include <dolfin/function/FunctionSpace.h>
+#include <dolfin/la/SparsityPattern.h>
+#include <dolfin/fem/Form.h>
 
 namespace dolfin
 {
@@ -39,6 +41,10 @@ namespace fem
 	//Return two arrays, where the first contain cell indices of all cells containing cell dofs, and the second cell containing the others
 	std::pair<std::vector<int>, std::vector<int>>
 	  cell_classification();
+
+
+	// Add sparsity pattern for multi-point constraints to existing sparsity pattern
+	std::shared_ptr<la::SparsityPattern> generate_sparsity_pattern(const Form&,std::shared_ptr<la::SparsityPattern>);
 
   private:
 	std::shared_ptr<const function::FunctionSpace> _function_space;

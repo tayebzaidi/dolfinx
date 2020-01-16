@@ -25,6 +25,7 @@
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/la/PETScVector.h>
+#include <dolfinx/la/SparsityPattern.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshFunction.h>
 #include <memory>
@@ -415,7 +416,9 @@ void fem(py::module& m)
       .def("slave_to_master",
            &dolfinx::fem::MultiPointConstraint::slave_to_master)
       .def("cell_classification",
-           &dolfinx::fem::MultiPointConstraint::cell_classification);
+           &dolfinx::fem::MultiPointConstraint::cell_classification)
+      .def("generate_sparsity_pattern",
+           &dolfinx::fem::MultiPointConstraint::generate_sparsity_pattern);
 
   // dolfinx::fem::PETScDMCollection
   py::class_<dolfinx::fem::PETScDMCollection,

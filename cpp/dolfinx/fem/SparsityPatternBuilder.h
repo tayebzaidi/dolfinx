@@ -26,7 +26,6 @@ class Mesh;
 namespace fem
 {
 class DofMap;
- class MultiPointConstraint;
 
 /// This class provides functions to compute the sparsity pattern
 /// based on DOF maps
@@ -47,17 +46,6 @@ public:
   static void exterior_facets(la::SparsityPattern& pattern,
                               const mesh::Mesh& mesh,
                               const std::array<const fem::DofMap*, 2> dofmaps);
-
-  /// Iterate over the master-slave cells and insert entries into sparsity pattern
-  ///
-  /// @param[in] pattern The sparsity pattern which is modified
-  /// @param[in] mesh The relevant mesh
-  /// @param[in] dofmaps the dofmaps for the test and trial function (assuming same sapce
-  /// @param[in] mpc the multipointconstraint
-  static void MultiPointConstraint(la::SparsityPattern& pattern,
-								   const mesh::Mesh& mesh,
-								   const std::array<const fem::DofMap*, 2> dofmaps,
-								   fem::MultiPointConstraint& mpc);
 };
 } // namespace fem
 } // namespace dolfin

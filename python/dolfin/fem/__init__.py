@@ -7,7 +7,7 @@
 """Tools for assembling and manipulating finite element forms"""
 
 from dolfin.fem.assemble import (create_vector, create_vector_block, create_vector_nest,
-                                 create_matrix, create_matrix_block, create_matrix_nest, create_matrix_mpc,
+                                 create_matrix, create_matrix_block, create_matrix_nest,
                                  assemble_scalar,
                                  assemble_vector, assemble_vector_nest, assemble_vector_block,
                                  assemble_matrix, assemble_matrix_nest, assemble_matrix_block,
