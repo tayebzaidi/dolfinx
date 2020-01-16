@@ -36,6 +36,10 @@ namespace fem
 	/// Slave to master map
 	std::unordered_map<std::size_t, std::size_t> slave_to_master() const;
 
+	//Return two arrays, where the first contain cell indices of all cells containing cell dofs, and the second cell containing the others
+	std::pair<std::vector<int>, std::vector<int>>
+	  cell_classification();
+
   private:
 	std::shared_ptr<const function::FunctionSpace> _function_space;
 	const std::unordered_map<std::size_t, std::size_t> _slave_to_master;

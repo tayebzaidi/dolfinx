@@ -409,9 +409,13 @@ void fem(py::module& m)
              std::shared_ptr<dolfinx::fem::MultiPointConstraint>>
       multipointconstraint(m, "MultiPointConstraint",
                            "Object for representing multi-point constraints");
-  multipointconstraint.def(
-      py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
-               std::unordered_map<std::size_t, std::size_t>>());
+  multipointconstraint
+        .def(py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
+                    std::unordered_map<std::size_t, std::size_t>>())
+      .def("slave_to_master",
+           &dolfinx::fem::MultiPointConstraint::slave_to_master)
+      .def("cell_classification",
+           &dolfinx::fem::MultiPointConstraint::cell_classification);
 
   // dolfinx::fem::PETScDMCollection
   py::class_<dolfinx::fem::PETScDMCollection,
