@@ -14,7 +14,6 @@ import ufl
 from dolfin import cpp
 from dolfin.fem.dirichletbc import DirichletBC
 from dolfin.fem.form import Form
-from dolfin.fem.multipointconstraint import MultiPointConstraint
 
 
 def _create_cpp_form(form):
@@ -54,6 +53,7 @@ def create_matrix(a: typing.Union[Form, cpp.fem.Form]) -> PETSc.Mat:
 
 def create_matrix_block(a: typing.List[typing.List[typing.Union[Form, cpp.fem.Form]]]) -> PETSc.Mat:
     return cpp.fem.create_matrix_block(_create_cpp_form(a))
+
 
 def create_matrix_nest(a: typing.List[typing.List[typing.Union[Form, cpp.fem.Form]]]) -> PETSc.Mat:
     return cpp.fem.create_matrix_nest(_create_cpp_form(a))
