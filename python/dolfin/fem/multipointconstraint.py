@@ -31,5 +31,5 @@ class MultiPointConstraint(cpp.fem.MultiPointConstraint):
             _V = V._cpp_object
         except AttributeError:
             _V = V
-        #compat map tmp struct until everything is rewritten
-        super().__init__(_V, compat_map)#slaves, masters, coefficients, offsets)
+        # compat map tmp struct until everything is rewritten
+        super().__init__(_V, compat_map)  # slaves, masters, coefficients, offsets)
