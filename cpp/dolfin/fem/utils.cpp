@@ -118,7 +118,7 @@ la::SparsityPattern dolfin::fem::create_sparsity_pattern(const Form& a)
   if (a.rank() != 2)
   {
     throw std::runtime_error(
-        "Cannot initialise matrix. Form is not a bilinear form");
+        "Cannot create sparsity pattern. Form is not a bilinear form");
   }
   // Get dof maps
   std::array<const DofMap*, 2> dofmaps
