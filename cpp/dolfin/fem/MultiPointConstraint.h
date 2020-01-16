@@ -28,7 +28,7 @@ namespace fem
   {
 
   public:
-  /// Create multipointconstraint
+  /// Create multi-point constraint
   ///
   /// @param[in] V The functionspace on which the multipoint constraint
   /// condition is applied
@@ -38,13 +38,15 @@ namespace fem
 	/// Slave to master map
 	std::unordered_map<std::size_t, std::size_t> slave_to_master() const;
 
-	//Return two arrays, where the first contain cell indices of all cells containing cell dofs, and the second cell containing the others
+	/// Return two arrays, where the first contain cell indices of all cells containing cell dofs, and the second cell containing the others
 	std::pair<std::vector<int>, std::vector<int>>
 	  cell_classification();
 
 
-	// Add sparsity pattern for multi-point constraints to existing sparsity pattern
-	std::shared_ptr<la::SparsityPattern> generate_sparsity_pattern(const Form&,std::shared_ptr<la::SparsityPattern>);
+	/// Add sparsity pattern for multi-point constraints to existing sparsity pattern
+	/// @param[in] a       bi-linear form for the current variational problem (The one used to generate input sparsity-pattern).
+	/// @param[in] pattern Existing sparsity pattern.
+	std::shared_ptr<la::SparsityPattern> generate_sparsity_pattern(const Form& a,std::shared_ptr<la::SparsityPattern> pattern);
 
   private:
 	std::shared_ptr<const function::FunctionSpace> _function_space;
