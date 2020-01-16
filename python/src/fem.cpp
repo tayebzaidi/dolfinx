@@ -25,6 +25,7 @@
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScMatrix.h>
 #include <dolfin/la/PETScVector.h>
+#include <dolfin/la/SparsityPattern.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshFunction.h>
 #include <memory>
@@ -145,6 +146,15 @@ void fem(py::module& m)
       py::return_value_policy::take_ownership,
       "Create nested vector for multiple (stacked) linear forms.");
   m.def(
+      "create_sparsity_pattern",
+      [](const dolfin::fem::Form& a) {
+        dolfin::la::SparsityPattern pattern
+            = dolfin::fem::create_sparsity_pattern(a);
+        return pattern;
+      },
+      py::return_value_policy::take_ownership,
+      "Create a Sparsity-pattern for bilinear form.");
+  m.def(
       "create_matrix",
       [](const dolfin::fem::Form& a) {
         auto A = dolfin::fem::create_matrix(a);
@@ -165,16 +175,6 @@ void fem(py::module& m)
       },
       py::return_value_policy::take_ownership,
       "Create monolithic sparse matrix for stacked bilinear forms.");
-  m.def(
-      "create_matrix_mpc",
-      [](const dolfin::fem::Form& a, dolfin::fem::MultiPointConstraint& mpc) {
-        auto A = dolfin::fem::create_matrix_mpc(a, mpc);
-        Mat _A = A.mat();
-        PetscObjectReference((PetscObject)_A);
-        return _A;
-      },
-      py::return_value_policy::take_ownership,
-      "Create a PETSc Mat for bilinear form with multi point constraints.");
   m.def(
       "create_matrix_nest",
       [](const std::vector<std::vector<const dolfin::fem::Form*>>& a) {
@@ -441,7 +441,9 @@ void fem(py::module& m)
       .def("slave_to_master",
            &dolfin::fem::MultiPointConstraint::slave_to_master)
       .def("cell_classification",
-           &dolfin::fem::MultiPointConstraint::cell_classification);
+           &dolfin::fem::MultiPointConstraint::cell_classification)
+      .def("generate_sparsity_pattern",
+           &dolfin::fem::MultiPointConstraint::generate_sparsity_pattern);
   // dolfin::fem::PETScDMCollection
   py::class_<dolfin::fem::PETScDMCollection,
              std::shared_ptr<dolfin::fem::PETScDMCollection>>(

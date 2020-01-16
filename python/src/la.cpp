@@ -90,20 +90,22 @@ void la(py::module& m)
             &dolfin::la::create_petsc_vector),
         py::return_value_policy::take_ownership,
         "Create a ghosted PETSc Vec for index map.");
-  m.def("create_vector",
-        [](const MPICommWrapper comm, std::array<std::int64_t, 2> range,
-           const Eigen::Array<PetscInt, Eigen::Dynamic, 1>& ghost_indices,
-           int block_size) {
-          return dolfin::la::create_petsc_vector(comm.get(), range,
-                                                 ghost_indices, block_size);
-        },
-        py::return_value_policy::take_ownership, "Create a PETSc Vec.");
-  m.def("create_matrix",
-        [](const MPICommWrapper comm, const dolfin::la::SparsityPattern& p) {
-          return dolfin::la::create_petsc_matrix(comm.get(), p);
-        },
-        py::return_value_policy::take_ownership,
-        "Create a PETSc Mat from sparsity pattern.");
+  m.def(
+      "create_vector",
+      [](const MPICommWrapper comm, std::array<std::int64_t, 2> range,
+         const Eigen::Array<PetscInt, Eigen::Dynamic, 1>& ghost_indices,
+         int block_size) {
+        return dolfin::la::create_petsc_vector(comm.get(), range, ghost_indices,
+                                               block_size);
+      },
+      py::return_value_policy::take_ownership, "Create a PETSc Vec.");
+  m.def(
+      "create_matrix",
+      [](const MPICommWrapper comm, const dolfin::la::SparsityPattern& p) {
+        return dolfin::la::create_petsc_matrix(comm.get(), p);
+      },
+      py::return_value_policy::take_ownership,
+      "Create a PETSc Mat from sparsity pattern.");
   m.def("create_petsc_index_sets", &dolfin::la::create_petsc_index_sets,
         py::return_value_policy::take_ownership);
   m.def("scatter_local_vectors", &dolfin::la::scatter_local_vectors,
@@ -115,7 +117,8 @@ void la(py::module& m)
   //   m.def("create_nullspace",
   //         [](const MPICommWrapper comm, MPI_Comm comm,
   //            const dolfin::la::VectorSpaceBasis& nullspace) {
-  //           return dolfin::la::create_petsc_nullspace(comm.get(), nullspace);
+  //           return dolfin::la::create_petsc_nullspace(comm.get(),
+  //           nullspace);
   //         },
   //         py::return_value_policy::take_ownership,
   //         "Create a PETSc MatNullSpace.");

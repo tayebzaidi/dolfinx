@@ -11,7 +11,6 @@
 #include "ElementDofLayout.h"
 #include <dolfin/common/types.h>
 #include <dolfin/la/PETScVector.h>
-#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/mesh/cell_types.h>
 #include <memory>
 #include <vector>
@@ -61,6 +60,9 @@ block_function_spaces(
     const Eigen::Ref<const Eigen::Array<const fem::Form*, Eigen::Dynamic,
                                         Eigen::Dynamic, Eigen::RowMajor>>& a);
 
+/// Create sparsity pattern for a given form. Does not assemble the pattern.
+la::SparsityPattern create_sparsity_pattern(const Form& a);
+
 /// Create matrix. Matrix is not zeroed.
 la::PETScMatrix create_matrix(const Form& a);
 
@@ -69,10 +71,6 @@ la::PETScMatrix create_matrix(const Form& a);
 la::PETScMatrix create_matrix_block(
     const Eigen::Ref<const Eigen::Array<const fem::Form*, Eigen::Dynamic,
                                         Eigen::Dynamic, Eigen::RowMajor>>& a);
-
-/// Create matrix for a MultiPointConstraintProblem. Matrix is not zeroed.
-la::PETScMatrix create_matrix_mpc(
-    const Form& a, fem::MultiPointConstraint& mpc);
 
 /// Create nested (MatNest) matrix. Matrix is not zeroed.
 la::PETScMatrix create_matrix_nest(

@@ -8,7 +8,6 @@
 #include <dolfin/common/IndexMap.h>
 #include <dolfin/common/MPI.h>
 #include <dolfin/fem/DofMap.h>
-#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/la/SparsityPattern.h>
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshEntity.h>
@@ -103,55 +102,6 @@ void SparsityPatternBuilder::exterior_facets(
     mesh::MeshEntity cell(mesh, D, facet.entities(D)[0]);
     pattern.insert_local(dofmaps[0]->cell_dofs(cell.index()),
                          dofmaps[1]->cell_dofs(cell.index()));
-  }
-}
-//-----------------------------------------------------------------------------
-void SparsityPatternBuilder::MultiPointConstraint(
-    la::SparsityPattern& pattern, const mesh::Mesh& mesh,
-    const std::array<const fem::DofMap*, 2> dofmaps,
-    fem::MultiPointConstraint& mpc)
-{
-  assert(dofmaps[0]);
-  assert(dofmaps[1]);
-  const std::unordered_map<std::size_t, std::size_t> pairs
-      = mpc.slave_to_master();
-
-  const int D = mesh.topology().dim();
-  for (auto& cell : mesh::MeshRange(mesh, D))
-  {
-
-    // Master slave sparsity pattern
-    std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2> master_slave_dofs;
-    // Dofs previously owned by slave dof
-    std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2> new_master_dofs;
-
-    for (std::size_t i = 0; i < 2; i++)
-    {
-      auto cell_dof_list = dofmaps[i]->cell_dofs(cell.index());
-      new_master_dofs[i].resize(cell_dof_list.size());
-      std::copy(cell_dof_list.data(),
-                cell_dof_list.data() + cell_dof_list.size(),
-                new_master_dofs[i].data());
-      for (auto it = pairs.begin(); it != pairs.end(); ++it)
-      {
-        for (std::size_t j = 0; j < unsigned(cell_dof_list.size()); ++j)
-        {
-
-          if (it->first == unsigned(cell_dof_list[j]))
-          {
-            new_master_dofs[i](j) = it->second;
-            master_slave_dofs[i].conservativeResize(master_slave_dofs[i].size()
-                                                    + 2);
-            master_slave_dofs[i].row(master_slave_dofs[i].rows() - 1)
-                = it->first;
-            master_slave_dofs[i].row(master_slave_dofs[i].rows() - 2)
-                = it->second;
-          }
-        }
-      }
-    }
-    pattern.insert_local(new_master_dofs[0], new_master_dofs[1]);
-    pattern.insert_local(master_slave_dofs[0], master_slave_dofs[1]);
   }
 }
 //-----------------------------------------------------------------------------
