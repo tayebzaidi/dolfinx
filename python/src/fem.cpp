@@ -299,14 +299,10 @@ void fem(py::module& m)
       "assemble_matrix",
       py::overload_cast<
           Mat, const dolfin::fem::Form&,
-          const std::vector<
-              std::shared_ptr<const dolfin::fem::MultiPointConstraint>>&,
           const std::vector<std::shared_ptr<const dolfin::fem::DirichletBC>>&>(
           &dolfin::fem::assemble_matrix));
   m.def("assemble_matrix",
         py::overload_cast<Mat, const dolfin::fem::Form&,
-                          const std::vector<std::shared_ptr<
-                              const dolfin::fem::MultiPointConstraint>>&,
                           const std::vector<bool>&, const std::vector<bool>&>(
             &dolfin::fem::assemble_matrix));
   m.def("add_diagonal",
