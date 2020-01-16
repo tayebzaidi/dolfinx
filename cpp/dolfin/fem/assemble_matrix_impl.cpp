@@ -8,7 +8,6 @@
 #include "DofMap.h"
 #include "Form.h"
 #include "utils.h"
-#include <dolfin/fem/MultiPointConstraint.h>
 #include <dolfin/function/Constant.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
@@ -18,16 +17,14 @@
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/mesh/MeshEntity.h>
 #include <dolfin/mesh/MeshIterator.h>
-#include <memory>
 #include <petscsys.h>
 
 using namespace dolfin;
 
 //-----------------------------------------------------------------------------
-void fem::impl::assemble_matrix(
-    Mat A, const Form& a,
-    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
-    const std::vector<bool>& bc0, const std::vector<bool>& bc1)
+void fem::impl::assemble_matrix(Mat A, const Form& a,
+                                const std::vector<bool>& bc0,
+                                const std::vector<bool>& bc1)
 {
   assert(a.mesh());
   const mesh::Mesh& mesh = *a.mesh();
@@ -35,7 +32,6 @@ void fem::impl::assemble_matrix(
   // Get dofmap data
   const fem::DofMap& dofmap0 = *a.function_space(0)->dofmap();
   const fem::DofMap& dofmap1 = *a.function_space(1)->dofmap();
-  // FIXME: Move this into assemble_cells, as the dofmaps are needed for MPC
   auto& dof_array0 = dofmap0.dof_array();
   auto& dof_array1 = dofmap1.dof_array();
 
@@ -73,7 +69,7 @@ void fem::impl::assemble_matrix(
         = integrals.integral_domains(type::cell, i);
     fem::impl::assemble_cells(
         A, mesh, active_cells, dof_array0, num_dofs_per_cell0, dof_array1,
-        num_dofs_per_cell1, mpc, bc0, bc1, fn, coeffs, constant_values);
+        num_dofs_per_cell1, bc0, bc1, fn, coeffs, constant_values);
   }
 
   for (int i = 0; i < integrals.num_integrals(type::exterior_facet); ++i)
@@ -104,9 +100,8 @@ void fem::impl::assemble_cells(
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap0,
     int num_dofs_per_cell0,
     const Eigen::Ref<const Eigen::Array<PetscInt, Eigen::Dynamic, 1>>& dofmap1,
-    int num_dofs_per_cell1,
-    const std::vector<std::shared_ptr<const MultiPointConstraint>>& mpc,
-    const std::vector<bool>& bc0, const std::vector<bool>& bc1,
+    int num_dofs_per_cell1, const std::vector<bool>& bc0,
+    const std::vector<bool>& bc1,
     const std::function<void(PetscScalar*, const PetscScalar*,
                              const PetscScalar*, const double*, const int*,
                              const int*)>& kernel,
@@ -134,11 +129,6 @@ void fem::impl::assemble_cells(
       coordinate_dofs(num_dofs_g, gdim);
   Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       Ae;
-
-  std::unordered_map<std::size_t, std::size_t> pairs;
-  // MPC constraints
-  if (!mpc.empty())
-    pairs = mpc[0]->slave_to_master();
 
   // Iterate over active cells
   PetscErrorCode ierr;
@@ -175,81 +165,7 @@ void fem::impl::assemble_cells(
           Ae.col(j).setZero();
       }
     }
-    if (!mpc.empty())
-    {
-      bool slave_in_cell = false;
-      Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                    Eigen::RowMajor>
-          Ampc_row;
-      PetscInt global_row;
-      PetscInt n_row;
-      Eigen::Matrix<PetscScalar, Eigen::Dynamic, Eigen::Dynamic,
-                    Eigen::RowMajor>
-          Ampc_col;
-      PetscInt global_col;
-      PetscInt n_col;
-      Eigen::Matrix<PetscScalar, 1, 1, Eigen::RowMajor> Ampc;
-      for (auto it = pairs.begin(); it != pairs.end(); ++it)
-      {
-        for (Eigen::Index i = 0; i < Ae.rows(); ++i)
-        {
-          // FIXME: For parallel, one has to look up the global indices of the
-          // dof from V.dofmap.indexmap.indices
-          const PetscInt dof = dofmap0[cell_index * num_dofs_per_cell0 + i];
-          if (it->first == unsigned(dof))
-          {
-            global_row = it->second;
-            n_row = 1;
-            Ampc_row.setZero(n_row, num_dofs_per_cell1);
-            Ampc_row.row(0) = Ae.row(i);
-            Ae.row(i).setZero();
-            slave_in_cell = true;
-          }
-        }
-        for (Eigen::Index j = 0; j < Ae.cols(); ++j)
-        {
-          const PetscInt dof = dofmap1[cell_index * num_dofs_per_cell1 + j];
-          if (it->first == unsigned(dof))
-          {
-            global_col = it->second;
-            n_col = 1;
-            Ampc_col.setZero(num_dofs_per_cell0, n_col);
-            Ampc_col.col(0) = Ae.col(j);
-            Ampc.setZero(n_row, n_col);
-            Ampc(0, 0) = Ampc_row(j) + Ampc_col(j);
-            Ampc_row.col(j).setZero();
-            Ae.col(j).setZero();
-            slave_in_cell = true;
-          }
-        }
 
-        if (slave_in_cell)
-        {
-          ierr = MatSetValuesLocal(A, n_row, &global_row, n_col, &global_col,
-                                   Ampc.data(), ADD_VALUES);
-#ifdef DEBUG
-          if (ierr != 0)
-            la::petsc_error(ierr, __FILE__, "MatSetValuesLocal");
-#endif
-          ierr = MatSetValuesLocal(A, n_row, &global_row, num_dofs_per_cell1,
-                                   dofmap1.data()
-                                       + cell_index * num_dofs_per_cell1,
-                                   Ampc_row.data(), ADD_VALUES);
-#ifdef DEBUG
-          if (ierr != 0)
-            la::petsc_error(ierr, __FILE__, "MatSetValuesLocal");
-#endif
-          ierr = MatSetValuesLocal(
-              A, num_dofs_per_cell0,
-              dofmap0.data() + cell_index * num_dofs_per_cell0, n_col,
-              &global_col, Ampc_col.data(), ADD_VALUES);
-#ifdef DEBUG
-          if (ierr != 0)
-            la::petsc_error(ierr, __FILE__, "MatSetValuesLocal");
-#endif
-        }
-      }
-    }
     ierr = MatSetValuesLocal(
         A, num_dofs_per_cell0, dofmap0.data() + cell_index * num_dofs_per_cell0,
         num_dofs_per_cell1, dofmap1.data() + cell_index * num_dofs_per_cell1,
