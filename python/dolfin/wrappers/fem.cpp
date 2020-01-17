@@ -405,18 +405,23 @@ void fem(py::module& m)
       .def("function_space", &dolfinx::fem::Form::function_space)
       .def("coordinate_mapping", &dolfinx::fem::Form::coordinate_mapping);
 
-// dolfinx::fem::MultiPointConstraint
+  // dolfinx::fem::MultiPointConstraint
   py::class_<dolfinx::fem::MultiPointConstraint,
              std::shared_ptr<dolfinx::fem::MultiPointConstraint>>
       multipointconstraint(m, "MultiPointConstraint",
                            "Object for representing multi-point constraints");
   multipointconstraint
-        .def(py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
-                    std::unordered_map<std::size_t, std::size_t>>())
-      .def("slave_to_master",
-           &dolfinx::fem::MultiPointConstraint::slave_to_master)
+      .def(py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
+                    std::vector<std::int64_t>, std::vector<std::int64_t>,
+                    std::vector<double>, std::vector<std::int64_t>>())
       .def("cell_classification",
            &dolfinx::fem::MultiPointConstraint::cell_classification)
+      .def("cell_to_slave_mapping",
+           &dolfinx::fem::MultiPointConstraint::cell_to_slave_mapping)
+      .def("masters_and_coefficients",
+           &dolfinx::fem::MultiPointConstraint::masters_and_coefficients)
+      .def("slaves", &dolfinx::fem::MultiPointConstraint::slaves)
+      .def("master_offsets", &dolfinx::fem::MultiPointConstraint::master_offsets)
       .def("generate_sparsity_pattern",
            &dolfinx::fem::MultiPointConstraint::generate_sparsity_pattern);
 
