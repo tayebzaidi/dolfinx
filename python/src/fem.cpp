@@ -433,11 +433,16 @@ void fem(py::module& m)
                            "Object for representing multi-point constraints");
   multipointconstraint
       .def(py::init<std::shared_ptr<const dolfin::function::FunctionSpace>,
-                    std::unordered_map<std::size_t, std::size_t>>())
-      .def("slave_to_master",
-           &dolfin::fem::MultiPointConstraint::slave_to_master)
+                    std::vector<std::int64_t>, std::vector<std::int64_t>,
+                    std::vector<double>, std::vector<std::int64_t>>())
       .def("cell_classification",
            &dolfin::fem::MultiPointConstraint::cell_classification)
+      .def("cell_to_slave_mapping",
+           &dolfin::fem::MultiPointConstraint::cell_to_slave_mapping)
+      .def("masters_and_coefficients",
+           &dolfin::fem::MultiPointConstraint::masters_and_coefficients)
+      .def("slaves", &dolfin::fem::MultiPointConstraint::slaves)
+      .def("master_offsets", &dolfin::fem::MultiPointConstraint::master_offsets)
       .def("generate_sparsity_pattern",
            &dolfin::fem::MultiPointConstraint::generate_sparsity_pattern);
   // dolfin::fem::PETScDMCollection
