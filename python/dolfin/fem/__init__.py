@@ -18,6 +18,7 @@ from dolfin.fem.dirichletbc import DirichletBC
 from dolfin.fem.dofmap import DofMap
 from dolfin.fem.form import Form
 from dolfin.cpp.fem import FormIntegrals
+from dolfin.fem.multipointconstraint import MultiPointConstraint
 from dolfin.fem.formmanipulations import (derivative, adjoint, increase_order,
                                           tear)
 from dolfin.fem.solving import solve
@@ -30,7 +31,7 @@ __all__ = [
     "assemble_vector_block", "assemble_vector_nest",
     "assemble_matrix_block", "assemble_matrix_nest",
     "assemble_matrix", "set_bc", "set_bc_nest", "create_coordinate_map",
-    "DirichletBC", "DofMap", "Form", "FormIntegrals",
+    "DirichletBC", "DofMap", "Form", "FormIntegrals", "MultiPointConstraint",
     "derivative", "adjoint", "increase_order",
     "tear", "project", "solve"
 ]

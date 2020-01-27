@@ -16,6 +16,7 @@ set(HEADERS_fem
   ${CMAKE_CURRENT_SOURCE_DIR}/Form.h
   ${CMAKE_CURRENT_SOURCE_DIR}/FormCoefficients.h
   ${CMAKE_CURRENT_SOURCE_DIR}/FormIntegrals.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/MultiPointConstraint.h
   ${CMAKE_CURRENT_SOURCE_DIR}/PETScDMCollection.h
   ${CMAKE_CURRENT_SOURCE_DIR}/ReferenceCellGeometry.h
   ${CMAKE_CURRENT_SOURCE_DIR}/SparsityPatternBuilder.h
@@ -38,6 +39,7 @@ target_sources(dolfinx PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/Form.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FormCoefficients.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/FormIntegrals.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/MultiPointConstraint.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/PETScDMCollection.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ReferenceCellGeometry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/SparsityPatternBuilder.cpp

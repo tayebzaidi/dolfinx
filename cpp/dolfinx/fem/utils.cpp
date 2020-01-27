@@ -117,7 +117,7 @@ la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
   if (a.rank() != 2)
   {
     throw std::runtime_error(
-        "Cannot initialise matrx. Form is not a bilinear form");
+        "Cannot initialise matrix. Form is not a bilinear form");
   }
 
   // Get dof maps

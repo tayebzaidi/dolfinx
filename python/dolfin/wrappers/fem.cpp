@@ -16,6 +16,7 @@
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/MultiPointConstraint.h>
 #include <dolfinx/fem/PETScDMCollection.h>
 #include <dolfinx/fem/assembler.h>
 #include <dolfinx/fem/utils.h>
@@ -402,6 +403,15 @@ void fem(py::module& m)
       .def("mesh", &dolfinx::fem::Form::mesh)
       .def("function_space", &dolfinx::fem::Form::function_space)
       .def("coordinate_mapping", &dolfinx::fem::Form::coordinate_mapping);
+
+// dolfinx::fem::MultiPointConstraint
+  py::class_<dolfinx::fem::MultiPointConstraint,
+             std::shared_ptr<dolfinx::fem::MultiPointConstraint>>
+      multipointconstraint(m, "MultiPointConstraint",
+                           "Object for representing multi-point constraints");
+  multipointconstraint.def(
+      py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
+               std::unordered_map<std::size_t, std::size_t>>());
 
   // dolfinx::fem::PETScDMCollection
   py::class_<dolfinx::fem::PETScDMCollection,

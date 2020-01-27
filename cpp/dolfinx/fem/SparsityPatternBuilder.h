@@ -8,6 +8,8 @@
 
 #include <array>
 #include <dolfinx/la/SparsityPattern.h>
+#include <dolfinx/fem/MultiPointConstraint.h>
+#include <dolfin/la/SparsityPattern.h>
 
 namespace dolfinx
 {
@@ -24,6 +26,7 @@ class Mesh;
 namespace fem
 {
 class DofMap;
+ class MultiPointConstraint;
 
 /// This class provides functions to compute the sparsity pattern
 /// based on DOF maps
@@ -44,6 +47,5 @@ public:
   static void exterior_facets(la::SparsityPattern& pattern,
                               const mesh::Mesh& mesh,
                               const std::array<const fem::DofMap*, 2> dofmaps);
-};
 } // namespace fem
 } // namespace dolfin

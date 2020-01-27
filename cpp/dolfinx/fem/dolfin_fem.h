@@ -17,6 +17,7 @@ namespace dolfinx
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/FiniteElement.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/MultiPointConstraint.h>
 #include <dolfinx/fem/PETScDMCollection.h>
 #include <dolfinx/fem/SparsityPatternBuilder.h>
 #include <dolfinx/fem/assembler.h>
