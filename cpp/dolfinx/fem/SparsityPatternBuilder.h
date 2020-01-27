@@ -9,7 +9,6 @@
 #include <array>
 #include <dolfinx/la/SparsityPattern.h>
 #include <dolfinx/fem/MultiPointConstraint.h>
-#include <dolfin/la/SparsityPattern.h>
 
 namespace dolfinx
 {
