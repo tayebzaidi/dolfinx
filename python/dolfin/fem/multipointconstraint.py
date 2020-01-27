@@ -16,7 +16,6 @@ class MultiPointConstraint(cpp.fem.MultiPointConstraint):
         masters = []
         coefficients = []
         offsets = []
-        compat_map = {}
 
         for slave in master_slave_map.keys():
             offsets.append(len(masters))
