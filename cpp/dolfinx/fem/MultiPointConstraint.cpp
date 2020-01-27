@@ -6,6 +6,7 @@
 
 #include "MultiPointConstraint.h"
 #include <Eigen/Dense>
+#include <dolfinx/common/IndexMap.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
 #include <dolfinx/function/FunctionSpace.h>
@@ -23,13 +24,11 @@ MultiPointConstraint::MultiPointConstraint(
       _coefficients(coefficients), _offsets(offsets), _slave_cells(),
       _normal_cells(), _offsets_cell_to_slave(), _cell_to_slave()
 {
-  cell_classification();
 }
 
 /// Get the master nodes for the i-th slave
 std::vector<std::int64_t> MultiPointConstraint::masters(std::int64_t i)
 {
-  std::cout << "masters " << i << _masters.size();
   assert(i < unsigned(_masters.size()));
   std::vector<std::int64_t> owners;
   // Check if this is the final entry or beyond
@@ -64,11 +63,8 @@ MultiPointConstraint::cell_classification()
 {
   const mesh::Mesh& mesh = *(_function_space->mesh());
   const fem::DofMap& dofmap = *(_function_space->dofmap());
-  // Check if already computed
-  if (_slave_cells.size() > 0)
-  {
-    return std::pair(_slave_cells, _normal_cells);
-  }
+  // const std::vector<int64_t>& global_indices
+  //     = mesh.topology().global_indices(mesh.topology().dim());
 
   // Categorise cells as normal cells or slave cells,
   // which can later be used in the custom assembly
@@ -84,7 +80,7 @@ MultiPointConstraint::cell_classification()
     {
       for (Eigen::Index i = 0; i < dofs.size(); ++i)
       {
-        if (unsigned(dofs[i]) == slave)
+        if (unsigned(dofs[i] + dofmap.index_map->local_range()[0]) == slave)
         {
           _cell_to_slave.push_back(slave);
           j++;
@@ -124,7 +120,6 @@ MultiPointConstraint::generate_sparsity_pattern(
 
   // Generate slave_cells if they they haven't been computed
   slave_cells();
-
   auto mesh = *_function_space->mesh();
 
   // Loop over slave cells
@@ -137,7 +132,6 @@ MultiPointConstraint::generate_sparsity_pattern(
     for (auto slave_dof : slaves_i)
     {
       std::int64_t slave_index = 0; // Index in slave array
-
       // FIXME: Move this somewhere else as there should exist a map for this
       for (std::uint64_t counter = 0; counter < _slaves.size(); counter++)
       {
@@ -149,44 +143,45 @@ MultiPointConstraint::generate_sparsity_pattern(
       std::vector<std::int64_t> masters_i(
           _masters.begin() + _offsets[slave_index],
           _masters.begin() + _offsets[slave_index + 1]);
-
       // Insert pattern for each master
       for (auto master : masters_i)
       {
         // New sparsity pattern arrays
-        std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2>
-            master_slave_dofs;
         std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2>
             new_master_dofs;
 
         // Loop over test and trial space
         for (std::size_t j = 0; j < 2; j++)
         {
-          auto cell_dof_list = dofmaps[j]->cell_dofs(_slave_cells[i]);
 
+          auto cell_dof_list = dofmaps[j]->cell_dofs(_slave_cells[i]);
+          std::uint64_t local_min = dofmaps[j]->index_map->local_range()[0];
           new_master_dofs[j].resize(cell_dof_list.size());
           std::copy(cell_dof_list.data(),
                     cell_dof_list.data() + cell_dof_list.size(),
                     new_master_dofs[j].data());
 
-          // Replace slave dof with master dof
+          // Replace slave dof with master dof (global insert)
           for (std::size_t k = 0; k < unsigned(cell_dof_list.size()); ++k)
           {
-            if (_slaves[slave_index] == unsigned(cell_dof_list[k]))
+            if (_slaves[slave_index] == unsigned(cell_dof_list[k] + local_min))
             {
               new_master_dofs[j](k) = master;
-              master_slave_dofs[j].conservativeResize(
-                  master_slave_dofs[j].size() + 2);
-              master_slave_dofs[j].row(master_slave_dofs[j].rows() - 1)
-                  = _slaves[slave_index];
-              master_slave_dofs[j].row(master_slave_dofs[j].rows() - 2)
-                  = master;
+            }
+            else
+            {
+              new_master_dofs[j](k) += local_min;
             }
           }
         }
-
-        pattern->insert_local(new_master_dofs[0], new_master_dofs[1]);
-        pattern->insert_local(master_slave_dofs[0], master_slave_dofs[1]);
+        // Since all indices are global we need an identity map;
+        const auto glob_map
+            = [](const PetscInt j_index,
+                 const common::IndexMap& index_map1) -> PetscInt {
+          return j_index;
+        };
+        pattern->insert_entries(new_master_dofs[0], new_master_dofs[1],
+                                glob_map, glob_map);
       }
     }
   }

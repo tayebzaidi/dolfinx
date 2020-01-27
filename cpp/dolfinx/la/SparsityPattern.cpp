@@ -172,6 +172,7 @@ void SparsityPattern::insert_global(
   const auto row_map = [](const PetscInt i_index,
                           const common::IndexMap& index_map0) -> PetscInt {
     std::size_t bs = index_map0.block_size;
+    std::cout << "Block size " << bs << std::endl;
     assert(bs * index_map0.local_range()[0] <= (std::size_t)i_index
            and (std::size_t) i_index < bs * index_map0.local_range()[1]);
     return i_index - (PetscInt)bs * index_map0.local_range()[0];
