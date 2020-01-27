@@ -1,4 +1,4 @@
-from dolfin import cpp, function
+from dolfinx import cpp, function
 import typing
 
 
