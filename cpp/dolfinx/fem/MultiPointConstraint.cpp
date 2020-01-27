@@ -1,19 +1,19 @@
 // Copyright (C) 2019 Jorgen S. Dokken
 //
-// This file is part of DOLFIN (https://www.fenicsproject.org)
+// This file is part of DOLFIN-X (https://www.fenicsproject.org)
 //
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #include "MultiPointConstraint.h"
 #include <Eigen/Dense>
-#include <dolfin/fem/DofMap.h>
-#include <dolfin/fem/Form.h>
-#include <dolfin/function/FunctionSpace.h>
-#include <dolfin/la/SparsityPattern.h>
-#include <dolfin/mesh/MeshIterator.h>
+#include <dolfinx/fem/DofMap.h>
+#include <dolfinx/fem/Form.h>
+#include <dolfinx/function/FunctionSpace.h>
+#include <dolfinx/la/SparsityPattern.h>
+#include <dolfinx/mesh/MeshIterator.h>
 
-using namespace dolfin;
-using namespace dolfin::fem;
+using namespace dolfinx;
+using namespace dolfinx::fem;
 
 MultiPointConstraint::MultiPointConstraint(
     std::shared_ptr<const function::FunctionSpace> V,
@@ -112,9 +112,9 @@ MultiPointConstraint::cell_to_slave_mapping()
 }
 
 // Append to existing sparsity pattern
-std::shared_ptr<dolfin::la::SparsityPattern>
+std::shared_ptr<dolfinx::la::SparsityPattern>
 MultiPointConstraint::generate_sparsity_pattern(
-    const Form& a, std::shared_ptr<dolfin::la::SparsityPattern> pattern)
+    const Form& a, std::shared_ptr<dolfinx::la::SparsityPattern> pattern)
 {
   std::array<const DofMap*, 2> dofmaps
       = {{a.function_space(0)->dofmap().get(),

@@ -113,11 +113,7 @@ fem::block_function_spaces(
   return V;
 }
 //-----------------------------------------------------------------------------
-<<<<<<< HEAD:cpp/dolfinx/fem/utils.cpp
-la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
-=======
-la::SparsityPattern dolfin::fem::create_sparsity_pattern(const Form& a)
->>>>>>> Started major rewrite. NExt step is to remove c++ assembler:cpp/dolfin/fem/utils.cpp
+la::SparsityPattern dolfinx::fem::create_sparsity_pattern(const Form& a)
 {
   if (a.rank() != 2)
   {
@@ -150,10 +146,10 @@ la::SparsityPattern dolfin::fem::create_sparsity_pattern(const Form& a)
   return pattern;
 }
 //-----------------------------------------------------------------------------
-la::PETScMatrix dolfin::fem::create_matrix(const Form& a)
+la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
 {
   bool keep_diagonal = false;
-  la::SparsityPattern pattern = create_sparsity_pattern(a);
+  la::SparsityPattern pattern = fem::create_sparsity_pattern(a);
 
   common::Timer t0("Build sparsity");
   pattern.assemble();

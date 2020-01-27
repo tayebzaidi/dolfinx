@@ -1,16 +1,16 @@
 // Copyright (C) 2020 Jorgen S. Dokken
 //
-// This file is part of DOLFIN (https://www.fenicsproject.org)
+// This file is part of DOLFIN-X (https://www.fenicsproject.org)
 //
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #pragma once
 
-#include <dolfin/function/FunctionSpace.h>
-#include <dolfin/la/SparsityPattern.h>
-#include <dolfin/fem/Form.h>
+#include <dolfinx/function/FunctionSpace.h>
+#include <dolfinx/la/SparsityPattern.h>
+#include <dolfinx/fem/Form.h>
 
-namespace dolfin
+namespace dolfinx
 {
 namespace fem
 {
