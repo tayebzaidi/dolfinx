@@ -59,7 +59,7 @@ namespace fem
   /// Add sparsity pattern for multi-point constraints to existing sparsity pattern
   /// @param[in] a       bi-linear form for the current variational problem (The one used to generate input sparsity-pattern).
   /// @param[in] pattern Existing sparsity pattern.
-  std::shared_ptr<la::SparsityPattern> generate_sparsity_pattern(const Form& a,std::shared_ptr<la::SparsityPattern> pattern);
+  la::SparsityPattern generate_sparsity_pattern(const Form& a);
 
   /// Return array of slave coefficients
   std::vector<std::int64_t> slaves();

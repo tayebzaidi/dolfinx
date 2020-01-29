@@ -134,11 +134,10 @@ public:
       const std::function<PetscInt(const PetscInt, const common::IndexMap&)>&
           col_map);
 
-
-private:
-
   // Print some useful information
   void info_statistics() const;
+
+private:
 
   // MPI communicator
   dolfinx::MPI::Comm _mpi_comm;

@@ -150,7 +150,6 @@ la::PETScMatrix dolfinx::fem::create_matrix(const Form& a)
 {
   bool keep_diagonal = false;
   la::SparsityPattern pattern = fem::create_sparsity_pattern(a);
-
   common::Timer t0("Build sparsity");
   pattern.assemble();
   t0.stop();

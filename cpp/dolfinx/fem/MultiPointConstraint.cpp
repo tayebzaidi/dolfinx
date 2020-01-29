@@ -9,6 +9,7 @@
 #include <dolfinx/common/IndexMap.h>
 #include <dolfinx/fem/DofMap.h>
 #include <dolfinx/fem/Form.h>
+#include <dolfinx/fem/SparsityPatternBuilder.h>
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/SparsityPattern.h>
 #include <dolfinx/mesh/MeshIterator.h>
@@ -108,19 +109,43 @@ MultiPointConstraint::cell_to_slave_mapping()
 }
 
 // Append to existing sparsity pattern
-std::shared_ptr<dolfinx::la::SparsityPattern>
-MultiPointConstraint::generate_sparsity_pattern(
-    const Form& a, std::shared_ptr<dolfinx::la::SparsityPattern> pattern)
+dolfinx::la::SparsityPattern
+MultiPointConstraint::generate_sparsity_pattern(const Form& a)
 {
+
+  if (a.rank() != 2)
+  {
+    throw std::runtime_error(
+        "Cannot create sparsity pattern. Form is not a bilinear form");
+  }
+  // Get dof maps
   std::array<const DofMap*, 2> dofmaps
       = {{a.function_space(0)->dofmap().get(),
           a.function_space(1)->dofmap().get()}};
-  dofmaps[0];
-  dofmaps[1];
 
-  // Generate slave_cells if they they haven't been computed
-  slave_cells();
-  auto mesh = *_function_space->mesh();
+  // Get mesh
+  assert(a.mesh());
+  const mesh::Mesh& mesh = *(a.mesh());
+
+  // Get common::IndexMaps for each dimension
+  std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps
+      = {{dofmaps[0]->index_map, dofmaps[1]->index_map}};
+
+  // Need to create new IndexMaps here with additional ghosts corresponding to
+  // masters and slaves on different processors
+
+  // Create and build sparsity pattern
+  la::SparsityPattern pattern(mesh.mpi_comm(), index_maps);
+  if (a.integrals().num_integrals(fem::FormIntegrals::Type::cell) > 0)
+    SparsityPatternBuilder::cells(pattern, mesh, {{dofmaps[0], dofmaps[1]}});
+  if (a.integrals().num_integrals(fem::FormIntegrals::Type::interior_facet) > 0)
+    SparsityPatternBuilder::interior_facets(pattern, mesh,
+                                            {{dofmaps[0], dofmaps[1]}});
+  if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
+    SparsityPatternBuilder::exterior_facets(pattern, mesh,
+                                            {{dofmaps[0], dofmaps[1]}});
+
+  pattern.info_statistics();
 
   // Loop over slave cells
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
@@ -149,7 +174,9 @@ MultiPointConstraint::generate_sparsity_pattern(
         // New sparsity pattern arrays
         std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2>
             new_master_dofs;
-
+        // Sparsity pattern needed for columns
+        std::array<Eigen::Array<PetscInt, Eigen::Dynamic, 1>, 2>
+            master_slave_dofs;
         // Loop over test and trial space
         for (std::size_t j = 0; j < 2; j++)
         {
@@ -167,10 +194,16 @@ MultiPointConstraint::generate_sparsity_pattern(
             if (_slaves[slave_index] == unsigned(cell_dof_list[k] + local_min))
             {
               new_master_dofs[j](k) = master;
+              master_slave_dofs[j].conservativeResize(
+                  master_slave_dofs[j].size() + 2);
+              master_slave_dofs[j].row(master_slave_dofs[j].rows() - 1)
+                  = _slaves[slave_index];
+              master_slave_dofs[j].row(master_slave_dofs[j].rows() - 2)
+                  = master;
             }
             else
             {
-              new_master_dofs[j](k) += local_min;
+              new_master_dofs[j](k) = new_master_dofs[j](k) + local_min;
             }
           }
         }
@@ -180,12 +213,15 @@ MultiPointConstraint::generate_sparsity_pattern(
                  const common::IndexMap& index_map1) -> PetscInt {
           return j_index;
         };
-        pattern->insert_entries(new_master_dofs[0], new_master_dofs[1],
-                                glob_map, glob_map);
+        pattern.insert_entries(new_master_dofs[0], new_master_dofs[1], glob_map,
+                               glob_map);
+        pattern.insert_entries(master_slave_dofs[0], master_slave_dofs[1],
+                               glob_map, glob_map);
       }
     }
   }
-  // pattern->assemble();
+  pattern.info_statistics();
+  pattern.assemble();
   return pattern;
 }
 

@@ -19,7 +19,7 @@ REQUIREMENTS = [
     "numpy",
     "mpi4py",
     "petsc4py",
-    "fenics-ffcx",
+    # "fenics-ffcx",
     "fenics-ufl{}".format(RESTRICT_REQUIREMENTS),
 ]
 
