@@ -8,6 +8,7 @@
 
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/la/SparsityPattern.h>
+#include <dolfinx/la/PETScMatrix.h>
 #include <dolfinx/fem/Form.h>
 
 namespace dolfinx
@@ -51,15 +52,14 @@ namespace fem
   std::vector<std::int64_t> slave_cells();
 
 
-  /// Return two arrays, where the first contain cell indices of all cells containing cell dofs, and the second cell containing the others
-  std::pair<std::vector<std::int64_t>, std::vector<std::int64_t>>
-	cell_classification();
+  /// Return an array containing the local index of all slave cells
+  void find_slave_cells();
 
 
   /// Add sparsity pattern for multi-point constraints to existing sparsity pattern
   /// @param[in] a       bi-linear form for the current variational problem (The one used to generate input sparsity-pattern).
   /// @param[in] pattern Existing sparsity pattern.
-  la::SparsityPattern generate_sparsity_pattern(const Form& a);
+  la::PETScMatrix generate_petsc_matrix(const Form& a);
 
   /// Return array of slave coefficients
   std::vector<std::int64_t> slaves();
@@ -85,6 +85,9 @@ namespace fem
 	std::vector<std::int64_t> _normal_cells;
 	std::vector<std::int64_t> _offsets_cell_to_slave;
 	std::vector<std::int64_t> _cell_to_slave;
+	std::vector<std::int64_t> _master_cells;
+	std::vector<std::int64_t> _offsets_cell_to_master;
+	std::vector<std::int64_t> _cell_to_master;
    };
 
 }
