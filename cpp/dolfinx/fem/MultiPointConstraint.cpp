@@ -148,95 +148,94 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   std::array<std::shared_ptr<const common::IndexMap>, 2> index_maps
       = {{dofmaps[0]->index_map, dofmaps[1]->index_map}};
 
-  // Eigen::Array<PetscInt, Eigen::Dynamic, 1> ghosts0;
-  // if (index_maps[0]->num_ghosts() > 0)
-  // {
-  //   ghosts0 = index_maps[0]->ghosts();
-  // }
-  // Eigen::Array<std::int64_t, Eigen::Dynamic, 1> new_ghosts0;
-  // for (int i = 0; i < ghosts0.size(); ++i)
-  // {
-  //   new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
-  //   new_ghosts0[i] = ghosts0[i];
-  // }
-  // Eigen::Array<PetscInt, Eigen::Dynamic, 1> ghosts1;
-  // if (index_maps[0]->num_ghosts() > 0)
-  // {
-  //   ghosts1 = index_maps[0]->ghosts();
-  // }
-  // Eigen::Array<std::int64_t, Eigen::Dynamic, 1> new_ghosts1;
-  // for (int i = 0; i < ghosts1.size(); ++i)
-  // {
-  //   new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
-  //   new_ghosts1[i] = ghosts1[i];
-  // }
-  // // Loop over slave cells on local processor
-  // int num_ghosts0 = ghosts0.size();
-  // int num_ghosts1 = ghosts1.size();
+  Eigen::Array<PetscInt, Eigen::Dynamic, 1> ghosts0;
+  if (index_maps[0]->num_ghosts() > 0)
+  {
+    ghosts0 = index_maps[0]->ghosts();
+  }
+  Eigen::Array<std::int64_t, Eigen::Dynamic, 1> new_ghosts0;
+  for (int i = 0; i < ghosts0.size(); ++i)
+  {
+    new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
+    new_ghosts0[i] = ghosts0[i];
+  }
+  Eigen::Array<PetscInt, Eigen::Dynamic, 1> ghosts1;
+  if (index_maps[0]->num_ghosts() > 0)
+  {
+    ghosts1 = index_maps[1]->ghosts();
+  }
+  Eigen::Array<std::int64_t, Eigen::Dynamic, 1> new_ghosts1;
+  for (int i = 0; i < ghosts1.size(); ++i)
+  {
+    new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
+    new_ghosts1[i] = ghosts1[i];
+  }
+  // Loop over slave cells on local processor
+  int num_ghosts0 = ghosts0.size();
+  int num_ghosts1 = ghosts1.size();
 
-  // for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
-  // {
-  //   std::vector<std::int64_t> slaves_i(
-  //       _cell_to_slave.begin() + _offsets_cell_to_slave[i],
-  //       _cell_to_slave.begin() + _offsets_cell_to_slave[i + 1]);
-  //   // Loop over slaves in cell
-  //   for (auto slave_dof : slaves_i)
-  //   {
-  //     std::int64_t slave_index = 0; // Index in slave array
-  //     // FIXME: Move this somewhere else as there should exist a map for
-  //     // this
-  //     // Find place of slave in global setting to obtain corresponding master
-  //     // dofs
-  //     for (std::uint64_t counter = 0; counter < _slaves.size(); counter++)
-  //     {
-  //       if (_slaves[counter] == slave_dof)
-  //       {
-  //         slave_index = counter;
-  //       }
-  //     }
-  //     std::vector<std::int64_t> masters_i(
-  //         _masters.begin() + _offsets[slave_index],
-  //         _masters.begin() + _offsets[slave_index + 1]);
-  //     for (auto master : masters_i)
-  //     {
-  //       // Loop over all local master cells to determine if master is in a
-  //       // local cell
-  //       bool master_on_proc = false;
-  //       for (std::int64_t m = 0; m < unsigned(_master_cells.size()); m++)
-  //       {
-  //         std::vector<std::int64_t> masters_on_cell(
-  //             _cell_to_master.begin() + _offsets_cell_to_master[m],
-  //             _cell_to_master.begin() + _offsets_cell_to_master[m + 1]);
-  //         if (std::find(masters_on_cell.begin(), masters_on_cell.end(),
-  //         master)
-  //             != masters_on_cell.end())
-  //         {
-  //           master_on_proc = true;
-  //         }
-  //       }
-  //       if (!master_on_proc)
-  //       {
-  //         new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
-  //         new_ghosts0[num_ghosts0] = master;
-  //         new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
-  //         new_ghosts1[num_ghosts1] = master;
-  //         num_ghosts0 = num_ghosts0 + 1;
-  //         num_ghosts1 = num_ghosts1 + 1;
-  //       }
-  //     }
-  //   }
-  // }
+  for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
+  {
+    std::vector<std::int64_t> slaves_i(
+        _cell_to_slave.begin() + _offsets_cell_to_slave[i],
+        _cell_to_slave.begin() + _offsets_cell_to_slave[i + 1]);
+    // Loop over slaves in cell
+    for (auto slave_dof : slaves_i)
+    {
+      std::int64_t slave_index = 0; // Index in slave array
+      // FIXME: Move this somewhere else as there should exist a map for
+      // this
+      // Find place of slave in global setting to obtain corresponding master
+      // dofs
+      for (std::uint64_t counter = 0; counter < _slaves.size(); counter++)
+      {
+        if (_slaves[counter] == slave_dof)
+        {
+          slave_index = counter;
+        }
+      }
+      std::vector<std::int64_t> masters_i(
+          _masters.begin() + _offsets[slave_index],
+          _masters.begin() + _offsets[slave_index + 1]);
+      for (auto master : masters_i)
+      {
+        // Loop over all local master cells to determine if master is in a
+        // local cell
+        bool master_on_proc = false;
+        for (std::int64_t m = 0; m < unsigned(_master_cells.size()); m++)
+        {
+          std::vector<std::int64_t> masters_on_cell(
+              _cell_to_master.begin() + _offsets_cell_to_master[m],
+              _cell_to_master.begin() + _offsets_cell_to_master[m + 1]);
+          if (std::find(masters_on_cell.begin(), masters_on_cell.end(), master)
+              != masters_on_cell.end())
+          {
+            master_on_proc = true;
+          }
+        }
+        if (!master_on_proc)
+        {
+          new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
+          new_ghosts0[num_ghosts0] = master;
+          new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
+          new_ghosts1[num_ghosts1] = master;
+          num_ghosts0 = num_ghosts0 + 1;
+          num_ghosts1 = num_ghosts1 + 1;
+        }
+      }
+    }
+  }
 
-  // std::array<std::shared_ptr<const common::IndexMap>, 2> new_maps;
-  // new_maps[0] = std::make_shared<common::IndexMap>(
-  //     mesh.mpi_comm(), index_maps[0]->size_local(), new_ghosts0,
-  //     index_maps[0]->block_size);
-  // new_maps[1] = std::make_shared<common::IndexMap>(
-  //     mesh.mpi_comm(), index_maps[1]->size_local(), new_ghosts1,
-  //     index_maps[1]->block_size);
-  // // create and build sparsity pattern
-  // la::SparsityPattern pattern(mesh.mpi_comm(), new_maps);
-  la::SparsityPattern pattern(mesh.mpi_comm(), index_maps);
+  std::array<std::shared_ptr<const common::IndexMap>, 2> new_maps;
+  new_maps[0] = std::make_shared<common::IndexMap>(
+      mesh.mpi_comm(), index_maps[0]->size_local(), new_ghosts0,
+      index_maps[0]->block_size);
+  new_maps[1] = std::make_shared<common::IndexMap>(
+      mesh.mpi_comm(), index_maps[1]->size_local(), new_ghosts1,
+      index_maps[1]->block_size);
+  // create and build sparsity pattern
+  la::SparsityPattern pattern(mesh.mpi_comm(), new_maps);
+  // la::SparsityPattern pattern(mesh.mpi_comm(), index_maps);
 
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::cell) > 0)
     SparsityPatternBuilder::cells(pattern, mesh, {{dofmaps[0], dofmaps[1]}});
@@ -246,7 +245,10 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
     SparsityPatternBuilder::exterior_facets(pattern, mesh,
                                             {{dofmaps[0], dofmaps[1]}});
-  pattern.info_statistics();
+  // pattern.info_statistics();
+  pattern.assemble();
+  // la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
+
   // Loop over slave cells
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
   {
@@ -302,12 +304,13 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
             }
           }
         }
-        pattern.insert_global(new_master_dofs[0], master_slave_dofs[1]);
+        // How to insert sparsitypattern for row not owned by processor?
+        // pattern.insert_global(new_master_dofs[0], master_slave_dofs[1]);
         pattern.insert_global(master_slave_dofs[0], new_master_dofs[1]);
       }
     }
   }
-  pattern.info_statistics();
+  // pattern.info_statistics();
   pattern.assemble();
   la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
 
