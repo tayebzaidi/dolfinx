@@ -119,6 +119,10 @@ public:
   /// no off-diagonal contribution.
   std::vector<std::vector<std::size_t>> off_diagonal_pattern(Type type) const;
 
+  // Print some useful information
+  void info_statistics() const;
+
+private:
   // Other insertion methods will call this method providing the
   // appropriate mapping of the indices in the entries.
   //
@@ -134,10 +138,6 @@ public:
       const std::function<PetscInt(const PetscInt, const common::IndexMap&)>&
           col_map);
 
-  // Print some useful information
-  void info_statistics() const;
-
-private:
 
   // MPI communicator
   dolfinx::MPI::Comm _mpi_comm;
