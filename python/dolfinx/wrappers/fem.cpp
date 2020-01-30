@@ -284,12 +284,11 @@ void fem(py::module& m)
         py::arg("b"), py::arg("L"),
         "Assemble linear form into an existing Eigen vector");
   // Matrices
-  m.def(
-      "assemble_matrix",
-      py::overload_cast<
-          Mat, const dolfinx::fem::Form&,
-          const std::vector<std::shared_ptr<const dolfinx::fem::DirichletBC>>&>(
-          &dolfinx::fem::assemble_matrix));
+  m.def("assemble_matrix",
+        py::overload_cast<
+            Mat, const dolfinx::fem::Form&,
+            const std::vector<std::shared_ptr<const dolfinx::fem::DirichletBC>>&>(
+            &dolfinx::fem::assemble_matrix));
   m.def("assemble_matrix",
         py::overload_cast<Mat, const dolfinx::fem::Form&,
                           const std::vector<bool>&, const std::vector<bool>&>(
@@ -307,8 +306,7 @@ void fem(py::module& m)
                 std::vector<std::shared_ptr<const dolfinx::fem::DirichletBC>>>&,
             const std::vector<Vec>&, double>(&dolfinx::fem::apply_lifting),
         "Modify vector for lifted boundary conditions");
-  m.def(
-      "apply_lifting",
+  m.def("apply_lifting",
       py::overload_cast<
           Eigen::Ref<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>>,
           const std::vector<std::shared_ptr<const dolfinx::fem::Form>>&,
@@ -422,17 +420,24 @@ void fem(py::module& m)
       .def(py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>,
                     std::vector<std::int64_t>, std::vector<std::int64_t>,
                     std::vector<double>, std::vector<std::int64_t>>())
-      .def("cell_classification",
-           &dolfinx::fem::MultiPointConstraint::cell_classification)
+      .def("slave_cells", &dolfinx::fem::MultiPointConstraint::slave_cells)
       .def("cell_to_slave_mapping",
            &dolfinx::fem::MultiPointConstraint::cell_to_slave_mapping)
       .def("masters_and_coefficients",
            &dolfinx::fem::MultiPointConstraint::masters_and_coefficients)
       .def("slaves", &dolfinx::fem::MultiPointConstraint::slaves)
-      .def("master_offsets", &dolfinx::fem::MultiPointConstraint::master_offsets)
-      .def("generate_sparsity_pattern",
-           &dolfinx::fem::MultiPointConstraint::generate_sparsity_pattern);
-
+      .def("master_offsets",
+           &dolfinx::fem::MultiPointConstraint::master_offsets)
+      .def(
+          "generate_petsc_matrix",
+          [](dolfinx::fem::MultiPointConstraint& self,
+             const dolfinx::fem::Form& a) {
+            auto A = self.generate_petsc_matrix(a);
+            Mat _A = A.mat();
+            PetscObjectReference((PetscObject)_A);
+            return _A;
+          },
+          "Create a PETSc Mat for bilinear form.");
   // dolfinx::fem::PETScDMCollection
   py::class_<dolfinx::fem::PETScDMCollection,
              std::shared_ptr<dolfinx::fem::PETScDMCollection>>(
