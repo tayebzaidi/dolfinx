@@ -247,7 +247,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
     if ((global_master < local_range[0]) || (local_range[1] < global_master))
     {
       bool already_ghosted = false;
-      std::cout << "Ghosts n stuff" << std::endl;
       for (std::int64_t gh = 0; gh < new_ghosts0.size(); gh++)
       {
         std::cout << new_ghosts0[gh] << " ";
@@ -258,12 +257,8 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           already_ghosted = true;
         }
       }
-      std::cout << "already ghosted?? " << already_ghosted << global_master
-                << std::endl;
       if (!already_ghosted)
       {
-        std::cout << "adding ghost " << global_master << " "
-                  << num_ghosts0 + index_maps[0]->size_local();
         new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
         new_ghosts0[num_ghosts0] = global_master;
         new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
