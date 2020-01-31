@@ -174,6 +174,8 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   int num_ghosts0 = ghosts0.size();
   int num_ghosts1 = ghosts1.size();
 
+  std::unordered_map<int, int> glob_to_loc_ghosts;
+
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
   {
     std::vector<std::int64_t> slaves_i(
@@ -219,6 +221,8 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           new_ghosts0[num_ghosts0] = master;
           new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
           new_ghosts1[num_ghosts1] = master;
+          glob_to_loc_ghosts[master]
+              = num_ghosts0 + index_maps[0]->size_local();
           num_ghosts0 = num_ghosts0 + 1;
           num_ghosts1 = num_ghosts1 + 1;
         }
@@ -245,9 +249,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
     SparsityPatternBuilder::exterior_facets(pattern, mesh,
                                             {{dofmaps[0], dofmaps[1]}});
-  // pattern.info_statistics();
-  pattern.assemble();
-  // la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
 
   // Loop over slave cells
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
@@ -287,26 +288,25 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           std::uint64_t local_min = dofmaps[j]->index_map->local_range()[0];
           new_master_dofs[j].resize(1);
 
-          // Replace slave dof with master dof (global insert)
+          // Replace slave dof with master dof (local insert)
           int l = 0;
           for (std::size_t k = 0; k < unsigned(cell_dof_list.size()); ++k)
           {
             if (_slaves[slave_index] == unsigned(cell_dof_list[k] + local_min))
             {
-              new_master_dofs[j](0) = master;
+              new_master_dofs[j](0) = glob_to_loc_ghosts[master];
             }
             else
             {
               master_slave_dofs[j].conservativeResize(
                   master_slave_dofs[j].size() + 1);
-              master_slave_dofs[j](l) = cell_dof_list(k) + local_min;
+              master_slave_dofs[j](l) = cell_dof_list(k);
               l = l + 1;
             }
           }
         }
-        // How to insert sparsitypattern for row not owned by processor?
-        // pattern.insert_global(new_master_dofs[0], master_slave_dofs[1]);
-        pattern.insert_global(master_slave_dofs[0], new_master_dofs[1]);
+        pattern.insert_local(new_master_dofs[0], master_slave_dofs[1]);
+        pattern.insert_local(master_slave_dofs[0], new_master_dofs[1]);
       }
     }
   }
