@@ -175,7 +175,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   int num_ghosts1 = ghosts1.size();
 
   std::unordered_map<int, int> glob_to_loc_ghosts;
-
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
   {
     std::vector<std::int64_t> slaves_i(
@@ -185,8 +184,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
     for (auto slave_dof : slaves_i)
     {
       std::int64_t slave_index = 0; // Index in slave array
-      // FIXME: Move this somewhere else as there should exist a map for
-      // this
       // Find place of slave in global setting to obtain corresponding master
       // dofs
       for (std::uint64_t counter = 0; counter < _slaves.size(); counter++)
@@ -230,6 +227,50 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
     }
   }
 
+  // Loop over master cells on local processor and add ghosts for all other
+  // masters (This could probably be optimized, but thats for later)
+  std::unordered_map<int, int> glob_master_to_loc_ghosts;
+  // for (std::int64_t i = 0; i < unsigned(_master_cells.size()); i++)
+  // {
+  //   std::vector<std::int64_t> masters_on_cell(
+  //       _cell_to_master.begin() + _offsets_cell_to_master[i],
+  //       _cell_to_master.begin() + _offsets_cell_to_master[i + 1]);
+  //   for (auto local_master : masters_on_cell)
+  //   {
+  //     // Add all masters not on this processor as a ghost
+  //     for (auto global_master : _masters)
+  //     {
+  //       if (global_master != local_master)
+  //       {
+  //         // Check if other master is part of cell
+  //         if (std::find(masters_on_cell.begin(), masters_on_cell.end(),
+  //                       global_master)
+  //             == masters_on_cell.end())
+  //         {
+  //           // Check if master is already a ghost
+  //           bool already_ghosted = false;
+  //           for (std::int64_t gh = 0; gh < new_ghosts0.size(); gh++)
+  //           {
+  //             if (global_master == new_ghosts0[gh])
+  //               already_ghosted = true;
+  //           }
+  //           if (!already_ghosted)
+  //           {
+  //             new_ghosts0.conservativeResize(new_ghosts0.size() + 1);
+  //             new_ghosts0[num_ghosts0] = global_master;
+  //             new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
+  //             new_ghosts1[num_ghosts1] = global_master;
+  //             glob_master_to_loc_ghosts[global_master]
+  //                 = num_ghosts0 + index_maps[0]->size_local();
+  //             num_ghosts0 = num_ghosts0 + 1;
+  //             num_ghosts1 = num_ghosts1 + 1;
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
   std::array<std::shared_ptr<const common::IndexMap>, 2> new_maps;
   new_maps[0] = std::make_shared<common::IndexMap>(
       mesh.mpi_comm(), index_maps[0]->size_local(), new_ghosts0,
@@ -249,6 +290,7 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::exterior_facet) > 0)
     SparsityPatternBuilder::exterior_facets(pattern, mesh,
                                             {{dofmaps[0], dofmaps[1]}});
+  pattern.info_statistics();
 
   // Loop over slave cells
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
@@ -294,7 +336,11 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           {
             if (_slaves[slave_index] == unsigned(cell_dof_list[k] + local_min))
             {
-              new_master_dofs[j](0) = glob_to_loc_ghosts[master];
+              // Check if master is a ghost
+              if (glob_to_loc_ghosts.find(master) != glob_to_loc_ghosts.end())
+                new_master_dofs[j](0) = glob_to_loc_ghosts[master];
+              else
+                new_master_dofs[j](0) = master - local_min;
             }
             else
             {
@@ -310,7 +356,38 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
       }
     }
   }
-  // pattern.info_statistics();
+
+  // Loop over local master cells
+  std::uint64_t local_min = dofmaps[0]->index_map->local_range()[0];
+  for (std::int64_t i = 0; i < unsigned(_master_cells.size()); i++)
+  {
+    std::vector<std::int64_t> masters_i(
+        _cell_to_master.begin() + _offsets_cell_to_master[i],
+        _cell_to_master.begin() + _offsets_cell_to_master[i + 1]);
+    for (auto master : masters_i)
+    {
+      Eigen::Array<PetscInt, 1, 1> local_master_dof(1);
+      local_master_dof << master - local_min;
+      Eigen::Array<PetscInt, 1, 1> other_master_dof;
+      for (auto other_master : _masters)
+      {
+        // If not on processor add ghost-index, else add local number
+        if (glob_master_to_loc_ghosts.find(other_master)
+            == glob_master_to_loc_ghosts.end())
+        {
+          other_master_dof[0] = glob_master_to_loc_ghosts[other_master];
+        }
+        else
+        {
+          other_master_dof[0] = other_master - local_min;
+        }
+        pattern.insert_local(local_master_dof, other_master_dof);
+        pattern.insert_local(other_master_dof, local_master_dof);
+      }
+    }
+  }
+
+  pattern.info_statistics();
   pattern.assemble();
   la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
 
