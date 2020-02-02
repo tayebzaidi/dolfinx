@@ -7,10 +7,13 @@
 #include "CollisionPredicates.h"
 #include "predicates.h"
 #include <Eigen/Dense>
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point.hpp>
+#include <boost/geometry/geometries/polygon.hpp>
+
 #include <dolfinx/mesh/Geometry.h>
 #include <dolfinx/mesh/MeshEntity.h>
 #include <dolfinx/mesh/cell_types.h>
-
 using namespace dolfinx;
 using namespace dolfinx::geometry;
 
@@ -43,19 +46,42 @@ Eigen::Vector3d cross_product(const Eigen::Vector3d& a,
 bool CollisionPredicates::collides(const mesh::MeshEntity& entity,
                                    const Eigen::Vector3d& point)
 {
-  // Intersection is only implemented for simplex meshes
-  if (!mesh::is_simplex(entity.mesh().cell_type()))
-  {
-    throw std::runtime_error(
-        "Cannot intersect cell and point. "
-        "Intersection is only implemented for simplex meshes");
-  }
-
   // Get data
   const mesh::Geometry& g = entity.mesh().geometry();
   const int32_t* v = entity.entities(0);
   const int tdim = entity.mesh().topology().dim();
   const int gdim = entity.mesh().geometry().dim();
+
+  // Intersection is only implemented for simplex meshes
+  if (!mesh::is_simplex(entity.mesh().cell_type()))
+  {
+    if (tdim == 2 and gdim == 2)
+    {
+      typedef boost::geometry::model::point<double, 2,
+                                            boost::geometry::cs::cartesian>
+          point_type;
+      boost::geometry::model::polygon<point_type, true, true> polygon_t;
+      boost::geometry::append(polygon_t.outer(),
+                              point_type(g.x(v[0])[0], g.x(v[0])[1]));
+      boost::geometry::append(polygon_t.outer(),
+                              point_type(g.x(v[1])[0], g.x(v[1])[1]));
+      boost::geometry::append(polygon_t.outer(),
+                              point_type(g.x(v[3])[0], g.x(v[3])[1]));
+      boost::geometry::append(polygon_t.outer(),
+                              point_type(g.x(v[2])[0], g.x(v[2])[1]));
+      boost::geometry::append(polygon_t.outer(),
+                              point_type(g.x(v[0])[0], g.x(v[0])[1]));
+      std::cout << g.x(v[3])[0] << " " << g.x(v[3])[1] << std::endl;
+      point_type p(point[0], point[1]);
+      return boost::geometry::covered_by(p, polygon_t);
+    }
+    else
+    {
+      throw std::runtime_error(
+          "Cannot intersect cell and point. "
+          "Intersection is only implemented for simplex meshes");
+    }
+  }
 
   // Pick correct specialized implementation
   if (tdim == 1 and gdim == 1)
