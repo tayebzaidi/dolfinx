@@ -75,6 +75,9 @@ namespace fem
   std::pair<std::vector<std::int64_t>, std::vector<std::int64_t>>
 	cell_to_slave_mapping();
 
+  /// Return the global to local mapping of a master coefficient it it is not on this processor
+  std::unordered_map<int, int> glob_to_loc_ghosts();
+
   private:
 	std::shared_ptr<const function::FunctionSpace> _function_space;
 	std::vector<std::int64_t> _slaves;
@@ -88,6 +91,7 @@ namespace fem
 	std::vector<std::int64_t> _master_cells;
 	std::vector<std::int64_t> _offsets_cell_to_master;
 	std::vector<std::int64_t> _cell_to_master;
+	std::unordered_map<int, int> _glob_to_loc_ghosts;
    };
 
 }

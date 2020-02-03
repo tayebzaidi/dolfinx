@@ -25,7 +25,8 @@ MultiPointConstraint::MultiPointConstraint(
     : _function_space(V), _slaves(slaves), _masters(masters),
       _coefficients(coefficients), _offsets(offsets), _slave_cells(),
       _normal_cells(), _offsets_cell_to_slave(), _cell_to_slave(),
-      _master_cells(), _offsets_cell_to_master(), _cell_to_master()
+      _master_cells(), _offsets_cell_to_master(), _cell_to_master(),
+      _glob_to_loc_ghosts()
 {
   find_slave_cells();
 }
@@ -75,6 +76,7 @@ void MultiPointConstraint::find_slave_cells()
   std::int64_t k = 0;
   _offsets_cell_to_slave.push_back(j);
   _offsets_cell_to_master.push_back(k);
+  std::array<std::int64_t, 2> local_range = dofmap.index_map->local_range();
 
   for (auto& cell : mesh::MeshRange(mesh, mesh.topology().dim()))
   {
@@ -86,7 +88,9 @@ void MultiPointConstraint::find_slave_cells()
     {
       for (auto slave : _slaves)
       {
-        if (unsigned(dofs[i] + dofmap.index_map->local_range()[0]) == slave)
+        if ((local_range[0] <= slave) && (slave < local_range[1])
+            && (unsigned(dofs[i] + dofmap.index_map->local_range()[0])
+                == slave))
         {
           _cell_to_slave.push_back(slave);
           j++;
@@ -95,7 +99,9 @@ void MultiPointConstraint::find_slave_cells()
       }
       for (auto master : _masters)
       {
-        if (unsigned(dofs[i] + dofmap.index_map->local_range()[0]) == master)
+        if ((local_range[0] <= master) && (master < local_range[1])
+            && (unsigned(dofs[i] + dofmap.index_map->local_range()[0])
+                == master))
         {
           _cell_to_master.push_back(master);
           k++;
@@ -174,7 +180,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   int num_ghosts0 = ghosts0.size();
   int num_ghosts1 = ghosts1.size();
 
-  std::unordered_map<int, int> glob_to_loc_ghosts;
   for (std::int64_t i = 0; i < unsigned(_slave_cells.size()); i++)
   {
     std::vector<std::int64_t> slaves_i(
@@ -193,6 +198,7 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           slave_index = counter;
         }
       }
+
       std::vector<std::int64_t> masters_i(
           _masters.begin() + _offsets[slave_index],
           _masters.begin() + _offsets[slave_index + 1]);
@@ -218,7 +224,7 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           new_ghosts0[num_ghosts0] = master;
           new_ghosts1.conservativeResize(new_ghosts1.size() + 1);
           new_ghosts1[num_ghosts1] = master;
-          glob_to_loc_ghosts[master]
+          _glob_to_loc_ghosts[master]
               = num_ghosts0 + index_maps[0]->size_local();
           num_ghosts0 = num_ghosts0 + 1;
           num_ghosts1 = num_ghosts1 + 1;
@@ -230,16 +236,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
   // Loop over master cells on local processor and add ghosts for all other
   // masters (This could probably be optimized, but thats for later)
   std::unordered_map<int, int> glob_master_to_loc_ghosts;
-  // for (std::int64_t i = 0; i < unsigned(_master_cells.size()); i++)
-  // {
-  //   std::vector<std::int64_t> masters_on_cell(
-  //       _cell_to_master.begin() + _offsets_cell_to_master[i],
-  //       _cell_to_master.begin() + _offsets_cell_to_master[i + 1]);
-  //   for (auto local_master : masters_on_cell)
-  //   {
-
-  // Loop over all master cells on this processor to check if the other
-  // master is locals
   std::array<std::int64_t, 2> local_range
       = dofmaps[0]->index_map->local_range();
   for (auto global_master : _masters)
@@ -249,7 +245,6 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
       bool already_ghosted = false;
       for (std::int64_t gh = 0; gh < new_ghosts0.size(); gh++)
       {
-        std::cout << new_ghosts0[gh] << " ";
         if (global_master == new_ghosts0[gh])
         {
 
@@ -338,8 +333,8 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
                 == unsigned(cell_dof_list[k] + local_range[0]))
             {
               // Check if master is a ghost
-              if (glob_to_loc_ghosts.find(master) != glob_to_loc_ghosts.end())
-                new_master_dofs[j](0) = glob_to_loc_ghosts[master];
+              if (_glob_to_loc_ghosts.find(master) != _glob_to_loc_ghosts.end())
+                new_master_dofs[j](0) = _glob_to_loc_ghosts[master];
               else
                 new_master_dofs[j](0) = master - local_range[0];
             }
@@ -368,10 +363,8 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
     {
       // Check if dof of owned cell is a local cell
       Eigen::Array<PetscInt, 1, 1> local_master_dof(1);
-
-      if ((master < local_range[0]) || (local_range[1] < master))
+      if ((master < local_range[0]) || (local_range[1] <= master))
       {
-
         local_master_dof[0] = glob_master_to_loc_ghosts[master];
       }
       else
@@ -385,7 +378,7 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
         if (other_master != master)
         {
           if ((other_master < local_range[0])
-              || (local_range[1] < other_master))
+              || (local_range[1] <= other_master))
           {
             other_master_dof[0] = glob_master_to_loc_ghosts[other_master];
           }
@@ -393,14 +386,14 @@ la::PETScMatrix MultiPointConstraint::generate_petsc_matrix(const Form& a)
           {
             other_master_dof[0] = other_master - local_range[0];
           }
-
           pattern.insert_local(local_master_dof, other_master_dof);
+          pattern.insert_local(other_master_dof, local_master_dof);
         }
       }
     }
   }
 
-  pattern.info_statistics();
+  // pattern.info_statistics();
   pattern.assemble();
   la::PETScMatrix A(a.mesh()->mpi_comm(), pattern);
 
@@ -419,4 +412,11 @@ MultiPointConstraint::masters_and_coefficients()
 std::vector<std::int64_t> MultiPointConstraint::master_offsets()
 {
   return _offsets;
+}
+
+/// Return the global to local mapping of a master coefficient it it is not on
+/// this processor
+std::unordered_map<int, int> MultiPointConstraint::glob_to_loc_ghosts()
+{
+  return _glob_to_loc_ghosts;
 }
