@@ -1,8 +1,8 @@
 """Unit tests for assembly with a numba kernel"""
 
-# Copyright (C) 2018 Chris N. Richardson
+# Copyright (C) 2018-2019 Chris N. Richardson and Michal Habera
 #
-# This file is part of DOLFIN (https://www.fenicsproject.org)
+# This file is part of DOLFINX (https://www.fenicsproject.org)
 #
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
@@ -10,10 +10,11 @@ import numba
 import numpy as np
 from petsc4py import PETSc
 
-import dolfin
-from dolfin import (MPI, FunctionSpace, TimingType, UnitSquareMesh, cpp,
-                    list_timings, Function)
-from dolfin_utils.test.skips import skip_if_complex
+import dolfinx
+from dolfinx import (MPI, FunctionSpace, TimingType, UnitSquareMesh, cpp,
+                     list_timings, Function)
+from dolfinx_utils.test.skips import skip_if_complex
+from dolfinx.fem import FormIntegrals
 
 c_signature = numba.types.void(
     numba.types.CPointer(numba.typeof(PETSc.ScalarType())),
@@ -74,16 +75,16 @@ def test_numba_assembly():
     V = FunctionSpace(mesh, ("Lagrange", 1))
 
     a = cpp.fem.Form([V._cpp_object, V._cpp_object])
-    a.set_tabulate_cell(-1, tabulate_tensor_A.address)
-    a.set_tabulate_cell(12, tabulate_tensor_A.address)
-    a.set_tabulate_cell(2, tabulate_tensor_A.address)
+    a.set_tabulate_tensor(FormIntegrals.Type.cell, -1, tabulate_tensor_A.address)
+    a.set_tabulate_tensor(FormIntegrals.Type.cell, 12, tabulate_tensor_A.address)
+    a.set_tabulate_tensor(FormIntegrals.Type.cell, 2, tabulate_tensor_A.address)
 
     L = cpp.fem.Form([V._cpp_object])
-    L.set_tabulate_cell(-1, tabulate_tensor_b.address)
+    L.set_tabulate_tensor(FormIntegrals.Type.cell, -1, tabulate_tensor_b.address)
 
-    A = dolfin.fem.assemble_matrix(a)
+    A = dolfinx.fem.assemble_matrix(a)
     A.assemble()
-    b = dolfin.fem.assemble_vector(L)
+    b = dolfinx.fem.assemble_vector(L)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
     Anorm = A.norm(PETSc.NormType.FROBENIUS)
@@ -91,7 +92,7 @@ def test_numba_assembly():
     assert (np.isclose(Anorm, 56.124860801609124))
     assert (np.isclose(bnorm, 0.0739710713711999))
 
-    list_timings([TimingType.wall])
+    list_timings(MPI.comm_world, [TimingType.wall])
 
 
 def test_coefficient():
@@ -102,10 +103,10 @@ def test_coefficient():
     vals.vector.set(2.0)
 
     L = cpp.fem.Form([V._cpp_object])
-    L.set_tabulate_cell(-1, tabulate_tensor_b_coeff.address)
+    L.set_tabulate_tensor(FormIntegrals.Type.cell, -1, tabulate_tensor_b_coeff.address)
     L.set_coefficient(0, vals._cpp_object)
 
-    b = dolfin.fem.assemble_vector(L)
+    b = dolfinx.fem.assemble_vector(L)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
     bnorm = b.norm(PETSc.NormType.N2)
@@ -220,15 +221,15 @@ def test_cffi_assembly():
 
     a = cpp.fem.Form([V._cpp_object, V._cpp_object])
     ptrA = ffi.cast("intptr_t", ffi.addressof(lib, "tabulate_tensor_poissonA"))
-    a.set_tabulate_cell(-1, ptrA)
+    a.set_tabulate_tensor(FormIntegrals.Type.cell, -1, ptrA)
 
     L = cpp.fem.Form([V._cpp_object])
     ptrL = ffi.cast("intptr_t", ffi.addressof(lib, "tabulate_tensor_poissonL"))
-    L.set_tabulate_cell(-1, ptrL)
+    L.set_tabulate_tensor(FormIntegrals.Type.cell, -1, ptrL)
 
-    A = dolfin.fem.assemble_matrix(a)
+    A = dolfinx.fem.assemble_matrix(a)
     A.assemble()
-    b = dolfin.fem.assemble_vector(L)
+    b = dolfinx.fem.assemble_vector(L)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
 
     Anorm = A.norm(PETSc.NormType.FROBENIUS)
@@ -236,4 +237,4 @@ def test_cffi_assembly():
     assert (np.isclose(Anorm, 56.124860801609124))
     assert (np.isclose(bnorm, 0.0739710713711999))
 
-    list_timings([TimingType.wall])
+    list_timings(MPI.comm_world, [TimingType.wall])

@@ -89,11 +89,10 @@
 
 #include "poisson.h"
 #include <cfloat>
-#include <dolfin.h>
-#include <dolfin/function/Constant.h>
-#include <dolfin/mesh/Ordering.h>
+#include <dolfinx.h>
+#include <dolfinx/function/Constant.h>
 
-using namespace dolfin;
+using namespace dolfinx;
 
 // Then follows the definition of the coefficient functions (for
 // :math:`f` and :math:`g`), which are derived from the
@@ -122,31 +121,7 @@ int main(int argc, char* argv[])
       MPI_COMM_WORLD, pt, {{32, 32}}, mesh::CellType::triangle,
       mesh::GhostMode::none));
 
-  mesh::Ordering::order_simplex(*mesh);
-
   auto V = fem::create_functionspace(poisson_functionspace_create, mesh);
-
-  // Now, the Dirichlet boundary condition (:math:`u = 0`) can be created
-  // using the class :cpp:class:`DirichletBC`. A :cpp:class:`DirichletBC`
-  // takes three arguments: the function space the boundary condition
-  // applies to, the value of the boundary condition, and the part of the
-  // boundary on which the condition applies. In our example, the function
-  // space is ``V``, the value of the boundary condition (0.0) can
-  // represented using a :cpp:class:`Function`, and the Dirichlet boundary
-  // is defined by the lambda expression.
-  // The definition of the Dirichlet boundary condition then looks
-  // as follows:
-  //
-  // .. code-block:: cpp
-
-  // FIXME: zero function and make sure ghosts are updated
-  // Define boundary condition
-  auto u0 = std::make_shared<function::Function>(V);
-
-  std::vector<std::shared_ptr<const fem::DirichletBC>> bc
-      = {std::make_shared<fem::DirichletBC>(V, u0, [](auto x) {
-          return (x.col(0) < DBL_EPSILON or x.col(0) > 1.0 - DBL_EPSILON);
-        })};
 
   // Next, we define the variational formulation by initializing the
   // bilinear and linear forms (:math:`a`, :math:`L`) using the previously
@@ -157,13 +132,11 @@ int main(int argc, char* argv[])
   // .. code-block:: cpp
 
   // Define variational forms
-  ufc_form* form_a = poisson_bilinearform_create();
-  auto a = std::make_shared<fem::Form>(fem::create_form(*form_a, {V, V}));
-  std::free(form_a);
+  std::shared_ptr<fem::Form> a
+      = fem::create_form(poisson_bilinearform_create, {V, V});
 
-  ufc_form* form_L = poisson_linearform_create();
-  auto L = std::make_shared<fem::Form>(fem::create_form(*form_L, {V}));
-  std::free(form_L);
+  std::shared_ptr<fem::Form> L
+      = fem::create_form(poisson_linearform_create, {V});
 
   auto f = std::make_shared<function::Function>(V);
   auto g = std::make_shared<function::Function>(V);
@@ -172,14 +145,37 @@ int main(int argc, char* argv[])
   auto cmap = a->coordinate_mapping();
   mesh->geometry().coord_mapping = cmap;
 
-  // auto dx = Eigen::square(x - 0.5);
-  // values = 10.0 * Eigen::exp(-(dx.col(0) + dx.col(1)) / 0.02);
-  f->interpolate([](auto values, auto x) {
+  // Now, the Dirichlet boundary condition (:math:`u = 0`) can be created
+  // using the class :cpp:class:`DirichletBC`. A :cpp:class:`DirichletBC`
+  // takes two arguments: the value of the boundary condition,
+  // and the part of the boundary on which the condition applies.
+  // In our example, the value of the boundary condition (0.0) can
+  // represented using a :cpp:class:`Function`, and the Dirichlet boundary
+  // is defined by the indices of degrees of freedom to which the boundary
+  // condition applies.
+  // The definition of the Dirichlet boundary condition then looks
+  // as follows:
+  //
+  // .. code-block:: cpp
+
+  // FIXME: zero function and make sure ghosts are updated
+  // Define boundary condition
+  auto u0 = std::make_shared<function::Function>(V);
+
+  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> bdofs
+      = fem::locate_dofs_geometrical(*V, [](auto& x) {
+          return (x.row(0) < DBL_EPSILON or x.row(0) > 1.0 - DBL_EPSILON);
+        });
+
+  std::vector<std::shared_ptr<const fem::DirichletBC>> bc
+      = {std::make_shared<fem::DirichletBC>(u0, bdofs)};
+
+  f->interpolate([](auto& x) {
     auto dx = Eigen::square(x - 0.5);
-    values = 10.0 * Eigen::exp(-(dx.col(0) + dx.col(1)) / 0.02);
+    return 10.0 * Eigen::exp(-(dx.row(0) + dx.row(1)) / 0.02);
   });
-  g->interpolate(
-      [](auto values, auto x) { values = Eigen::sin(5 * x.col(0)); });
+
+  g->interpolate([](auto& x) { return Eigen::sin(5 * x.row(0)); });
   L->set_coefficients({{"f", f}, {"g", g}});
 
   // Prepare and set Constants for the bilinear form
@@ -201,18 +197,19 @@ int main(int argc, char* argv[])
   la::PETScVector b(*L->function_space(0)->dofmap()->index_map);
 
   MatZeroEntries(A.mat());
-  dolfin::fem::assemble_matrix(A.mat(), *a, bc);
+  dolfinx::fem::assemble_matrix(A.mat(), *a, bc);
+  dolfinx::fem::add_diagonal(A.mat(), *V, bc);
   MatAssemblyBegin(A.mat(), MAT_FINAL_ASSEMBLY);
   MatAssemblyEnd(A.mat(), MAT_FINAL_ASSEMBLY);
 
   VecSet(b.vec(), 0.0);
   VecGhostUpdateBegin(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
   VecGhostUpdateEnd(b.vec(), INSERT_VALUES, SCATTER_FORWARD);
-  dolfin::fem::assemble_vector(b.vec(), *L);
-  dolfin::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
+  dolfinx::fem::assemble_vector(b.vec(), *L);
+  dolfinx::fem::apply_lifting(b.vec(), {a}, {{bc}}, {}, 1.0);
   VecGhostUpdateBegin(b.vec(), ADD_VALUES, SCATTER_REVERSE);
   VecGhostUpdateEnd(b.vec(), ADD_VALUES, SCATTER_REVERSE);
-  dolfin::fem::set_bc(b.vec(), bc, nullptr);
+  dolfinx::fem::set_bc(b.vec(), bc, nullptr);
 
   la::PETScKrylovSolver lu(MPI_COMM_WORLD);
   la::PETScOptions::set("ksp_type", "preonly");
