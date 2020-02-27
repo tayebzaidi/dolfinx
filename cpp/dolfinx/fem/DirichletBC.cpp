@@ -53,38 +53,58 @@ get_remote_bcs1(const common::IndexMap& map,
   if (num_neighbours == 0)
     return std::vector<std::int32_t>();
 
+  // Pack shared dofs that have been marked in this process.
+  std::vector<std::int32_t> send_sizes(num_neighbours, 0);
+  std::vector<std::int32_t> shared_dofs(dofs_local.size());
+  std::map<int, std::set<int>> shared_indices = map.compute_shared_indices();
+  for (std::size_t i = 0; i < dofs_local.size(); i++)
+  {
+    auto it = shared_indices.find(dofs_local[i]);
+    if (it != shared_indices.end())
+    {
+      std::set<int>& sharing_procs = it->second;
+      for (int p : sharing_procs)
+      {
+        auto iter = std::find(neighbours.begin(), neighbours.end(), p);
+        assert(iter != neighbours.end());
+        const int np = std::distance(neighbours.begin(), iter);
+        int pos
+            = std::accumulate(send_sizes.begin(), send_sizes.begin() + np, 0);
+        shared_dofs.insert(shared_dofs.begin() + pos, dofs_local[i]);
+        send_sizes[np]++;
+      }
+    }
+  }
+
   // Figure out how many entries to receive from each neighbour
-  const int num_dofs = dofs_local.size();
   std::vector<int> num_dofs_recv(num_neighbours);
-  MPI_Neighbor_allgather(&num_dofs, 1, MPI_INT, num_dofs_recv.data(), 1,
-                         MPI_INT, comm);
+  MPI_Neighbor_alltoall(send_sizes.data(), 1, MPI::mpi_type<int>(),
+                        num_dofs_recv.data(), 1, MPI::mpi_type<int>(), comm);
 
-  // NOTE: we could consider only dofs that we know are shared
-  // Build array of global indices of dofs
-  const std::vector<std::int64_t> dofs_global
-      = map.local_to_global(dofs_local, false);
-
-  // Compute displacements for data to receive. Last entry has total
-  // number of received items.
+  // Compute displacements for data to send and to receive. Last entry has total
+  // number of items.
   // Note: std::inclusive_scan would be better, but requires gcc >= 9.2.1
-  std::vector<int> disp(num_neighbours + 1, 0);
+  std::vector<int> send_disp(num_neighbours + 1, 0);
+  std::vector<int> recv_disp(num_neighbours + 1, 0);
+  std::partial_sum(send_sizes.begin(), send_sizes.end(), send_disp.begin() + 1);
   std::partial_sum(num_dofs_recv.begin(), num_dofs_recv.end(),
-                   disp.begin() + 1);
-  // std::inclusive_scan(num_dofs_recv.begin(), num_dofs_recv.end(),
-  //                     disp.begin() + 1);
+                   recv_disp.begin() + 1);
 
-  // NOTE: we could use MPI_Neighbor_alltoallv to send only to relevant
-  // processes
+  // Build array of global indices of shared dofs
+  shared_dofs.resize(send_disp.back());
+  const std::vector<std::int64_t> dofs_global
+      = map.local_to_global(shared_dofs, false);
 
-  // Send/receive global index of dofs with bcs to all neighbours
-  std::vector<std::int64_t> dofs_received(disp.back());
-  MPI_Neighbor_allgatherv(dofs_global.data(), dofs_global.size(), MPI_INT64_T,
-                          dofs_received.data(), num_dofs_recv.data(),
-                          disp.data(), MPI_INT64_T, comm);
+  std::vector<std::int64_t> dofs_received(recv_disp.back());
+  MPI_Neighbor_alltoallv(dofs_global.data(), send_sizes.data(),
+                         send_disp.data(), MPI_INT64_T, dofs_received.data(),
+                         num_dofs_recv.data(), recv_disp.data(), MPI_INT64_T,
+                         comm);
 
-  // FIXME: check that dofs is sorted
   // Build vector of local dof indicies that have been marked by another
-  // process
+  // process.
+  // Note: May have duplicated dofs shared with different processes. Duplicates
+  // are removed in a later stage
   std::vector<std::int32_t> dofs = map.global_to_local(dofs_received, false);
   dofs.erase(std::remove(dofs.begin(), dofs.end(), -1), dofs.end());
 
