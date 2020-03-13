@@ -10,6 +10,7 @@
 #include "utils.h"
 #include <dolfinx/common/IndexMap.h>
 #include <dolfinx/common/utils.h>
+#include <dolfinx/common/Timer.h>
 #include <dolfinx/fem/ElementDofLayout.h>
 #include <dolfinx/graph/AdjacencyList.h>
 #include <numeric>
@@ -234,6 +235,8 @@ std::vector<bool> mesh::compute_interior_facets(const Topology& topology)
 Eigen::Array<bool, Eigen::Dynamic, Eigen::Dynamic>
 mesh::compute_edge_reflections(const Topology& topology)
 {
+  common::Timer timer("Compute edge reflections");
+
   const int tdim = topology.dim();
   const CellType cell_type = topology.cell_type();
   const int edges_per_cell = cell_num_entities(cell_type, 1);
@@ -279,6 +282,8 @@ std::pair<Eigen::Array<bool, Eigen::Dynamic, Eigen::Dynamic>,
           Eigen::Array<std::uint8_t, Eigen::Dynamic, Eigen::Dynamic>>
 mesh::compute_face_permutations(const Topology& topology)
 {
+  common::Timer timer("Compute face permutations");
+
   const int tdim = topology.dim();
   assert(tdim > 2);
   if (!topology.index_map(2))

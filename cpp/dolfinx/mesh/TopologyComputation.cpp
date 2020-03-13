@@ -25,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+#include <execution>
+
 using namespace dolfinx;
 using namespace dolfinx::mesh;
 
@@ -49,14 +51,15 @@ sort_by_perm(const Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic,
   const int cols = array.cols();
 
   // Lambda with capture for sort comparison
-  const auto cmp = [&array, &cols](int a, int b) {
+  const auto cmp = [&array, cols](int a, int b) {
     const T* row_a = array.row(a).data();
     const T* row_b = array.row(b).data();
     return std::lexicographical_compare(row_a, row_a + cols, row_b,
                                         row_b + cols);
   };
 
-  std::sort(index.begin(), index.end(), cmp);
+  common::Timer t("Standard sort");
+  std::sort(std::parallel::par, index.begin(), index.end(), cmp);
   return index;
 }
 //-----------------------------------------------------------------------------
@@ -82,6 +85,8 @@ get_local_indexing(
         entity_list,
     const std::vector<std::int32_t>& entity_index)
 {
+  common::Timer("get_local_indexing");
+
   // Get first occurence in entity list of each entity
   std::vector<std::int32_t> unique_row(entity_list.rows(), -1);
   std::int32_t entity_count = 0;
@@ -387,7 +392,7 @@ compute_entities_by_key_matching(
   }
 
   // Start timer
-  common::Timer timer("Compute entities of dim = " + std::to_string(dim));
+  common::Timer timer("Compute entities by key-matching of dim = " + std::to_string(dim));
 
   // Initialize local array of entities
   const std::int8_t num_entities_per_cell
@@ -396,8 +401,10 @@ compute_entities_by_key_matching(
       = mesh::num_cell_vertices(mesh::cell_entity_type(cell_type, dim));
 
   // Create map from cell vertices to entity vertices
+  common::Timer t0("YYY get_entity_vertices");
   Eigen::Array<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> e_vertices
       = mesh::get_entity_vertices(cell_type, dim);
+  t0.stop();
 
   const int num_cells = cells.num_nodes();
 
@@ -405,6 +412,7 @@ compute_entities_by_key_matching(
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list(num_cells * num_entities_per_cell, num_vertices_per_entity);
   int k = 0;
+  common::Timer t1("YYY Cell loop");
   for (int c = 0; c < num_cells; ++c)
   {
     // Get vertices from cell
@@ -421,6 +429,7 @@ compute_entities_by_key_matching(
     }
   }
   assert(k == entity_list.rows());
+  t1.stop();
 
   std::vector<std::int32_t> entity_index(entity_list.rows());
   std::int32_t entity_count = 0;
@@ -428,15 +437,20 @@ compute_entities_by_key_matching(
   // Copy list and sort vertices of each entity into order
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list_sorted = entity_list;
+
+  common::Timer t2("YYY Sort");
   for (int i = 0; i < entity_list_sorted.rows(); ++i)
   {
     std::sort(entity_list_sorted.row(i).data(),
               entity_list_sorted.row(i).data() + num_vertices_per_entity);
   }
+  t2.stop();
 
   // Sort the list and label uniquely
-  std::vector<std::int32_t> sort_order
+  common::Timer t3("YYY Sort me per");
+  const std::vector<std::int32_t> sort_order
       = sort_by_perm<std::int32_t>(entity_list_sorted);
+  t3.stop();
   std::int32_t last = sort_order[0];
   entity_index[last] = 0;
   for (std::size_t i = 1; i < sort_order.size(); ++i)
@@ -488,6 +502,8 @@ graph::AdjacencyList<std::int32_t>
 compute_from_transpose(const graph::AdjacencyList<std::int32_t>& c_d1_d0,
                        const int num_entities_d0, int d0, int d1)
 {
+  common::Timer timer("Compute conectivity from tranpose (" + std::to_string(d0) + ", " + std::to_string(d1) + ")");
+
   LOG(INFO) << "Computing mesh connectivity " << d0 << " - " << d1
             << "from transpose.";
 
@@ -532,6 +548,8 @@ compute_from_map(const graph::AdjacencyList<std::int32_t>& c_d0_0,
 {
   assert(d1 > 0);
   assert(d0 > d1);
+
+  common::Timer timer("Compute conectivity from map (" + std::to_string(d0) + ", " + std::to_string(d1) + ")");
 
   // Make a map from the sorted d1 entity vertices to the d1 entity
   // index
@@ -590,6 +608,8 @@ std::tuple<std::shared_ptr<graph::AdjacencyList<std::int32_t>>,
 TopologyComputation::compute_entities(MPI_Comm comm, const Topology& topology,
                                       int dim)
 {
+  common::Timer timer("Compute mesh entities (dimension " + std::to_string(dim) + ")");
+
   LOG(INFO) << "Computing mesh entities of dimension " << dim;
   const int tdim = topology.dim();
 
