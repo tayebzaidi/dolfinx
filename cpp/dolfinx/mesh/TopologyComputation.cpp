@@ -25,8 +25,6 @@
 #include <utility>
 #include <vector>
 
-#include <execution>
-
 using namespace dolfinx;
 using namespace dolfinx::mesh;
 
@@ -59,7 +57,7 @@ sort_by_perm(const Eigen::Array<T, Eigen::Dynamic, Eigen::Dynamic,
   };
 
   common::Timer t("Standard sort");
-  std::sort(std::parallel::par, index.begin(), index.end(), cmp);
+  std::sort(index.begin(), index.end(), cmp);
   return index;
 }
 //-----------------------------------------------------------------------------
@@ -391,6 +389,8 @@ compute_entities_by_key_matching(
         "Cannot create vertices for topology. Should already exist.");
   }
 
+  const int size = dolfinx::MPI::size(comm);
+
   // Start timer
   common::Timer timer("Compute entities by key-matching of dim = " + std::to_string(dim));
 
@@ -401,7 +401,7 @@ compute_entities_by_key_matching(
       = mesh::num_cell_vertices(mesh::cell_entity_type(cell_type, dim));
 
   // Create map from cell vertices to entity vertices
-  common::Timer t0("YYY get_entity_vertices");
+  common::Timer t0("YYY get_entity_vertices " + std::to_string(size));
   Eigen::Array<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> e_vertices
       = mesh::get_entity_vertices(cell_type, dim);
   t0.stop();
@@ -412,7 +412,7 @@ compute_entities_by_key_matching(
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list(num_cells * num_entities_per_cell, num_vertices_per_entity);
   int k = 0;
-  common::Timer t1("YYY Cell loop");
+  common::Timer t1("YYY Cell loop "  + std::to_string(size));
   for (int c = 0; c < num_cells; ++c)
   {
     // Get vertices from cell
@@ -438,7 +438,7 @@ compute_entities_by_key_matching(
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list_sorted = entity_list;
 
-  common::Timer t2("YYY Sort");
+  common::Timer t2("YYY Sort " + std::to_string(size));
   for (int i = 0; i < entity_list_sorted.rows(); ++i)
   {
     std::sort(entity_list_sorted.row(i).data(),
@@ -447,7 +447,7 @@ compute_entities_by_key_matching(
   t2.stop();
 
   // Sort the list and label uniquely
-  common::Timer t3("YYY Sort me per");
+  common::Timer t3("YYY Sort by perm " + std::to_string(size));
   const std::vector<std::int32_t> sort_order
       = sort_by_perm<std::int32_t>(entity_list_sorted);
   t3.stop();
