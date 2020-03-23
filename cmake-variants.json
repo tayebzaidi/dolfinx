@@ -1,0 +1,27 @@
+{
+  "buildType": {
+    "default": "debug",
+    "choices": {
+      "debug": {
+        "short": "Debug",
+        "long": "Emit debug information without performing optimizations",
+        "buildType": "Debug"
+      },
+      "developer": {
+        "short": "Developer",
+        "long": "Developer options, some debug and assert on",
+        "buildType": "Developer"
+      },
+      "minsize": {
+        "short": "Release",
+        "long": "Release mode, all optimisations",
+        "buildType": "Release"
+      },
+      "reldeb": {
+        "short": "RelWithDebInfo",
+        "long": "Perform optimizations AND include debugging information",
+        "buildType": "RelWithDebInfo"
+      }
+    }
+  }
+}
