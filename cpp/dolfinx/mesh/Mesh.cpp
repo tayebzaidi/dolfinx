@@ -74,10 +74,11 @@ Mesh mesh::create(
       = mesh::extract_topology(layout, cells);
 
   // Compute the destination rank for cells on this process via graph
-  // partitioning
+  // partitioning. Get ghost cells via facet, regardless of requested mode.
   const int size = dolfinx::MPI::size(comm);
   const graph::AdjacencyList<std::int32_t> dest = Partitioning::partition_cells(
-      comm, size, layout.cell_type(), cells_topology, ghost_mode);
+      comm, size, layout.cell_type(), cells_topology,
+      mesh::GhostMode::shared_facet);
 
   // Distribute cells to destination rank
   const auto [cell_nodes, src, original_cell_index, ghost_owners]
