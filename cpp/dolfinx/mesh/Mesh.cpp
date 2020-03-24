@@ -91,7 +91,8 @@ Mesh mesh::create(
   // FIXME: Figure out how to check which entities are required
   // Initialise facet for P2
   // Create local entities
-  if (topology.dim() > 1)
+  int tdim = topology.dim();
+  if (tdim > 1)
   {
     // Create edges
     auto [cell_entity, entity_vertex, index_map]
@@ -105,18 +106,24 @@ Mesh mesh::create(
 
     // Create facets
     auto [cell_facet, facet_vertex, index_map1]
-        = mesh::TopologyComputation::compute_entities(comm, topology,
-                                                      topology.dim() - 1);
+        = mesh::TopologyComputation::compute_entities(comm, topology, tdim - 1);
     if (cell_facet)
-      topology.set_connectivity(cell_facet, topology.dim(), topology.dim() - 1);
+      topology.set_connectivity(cell_facet, tdim, tdim - 1);
     if (facet_vertex)
-      topology.set_connectivity(facet_vertex, topology.dim() - 1, 0);
+      topology.set_connectivity(facet_vertex, tdim - 1, 0);
     if (index_map1)
-      topology.set_index_map(topology.dim() - 1, index_map1);
+      topology.set_index_map(tdim - 1, index_map1);
   }
 
+  // FIXME: improve. Clip cell data, removing any unused ghost cells
+  int n_cells_local = topology.index_map(tdim)->size_local()
+                      + topology.index_map(tdim)->num_ghosts();
+  auto off1 = cell_nodes.offsets().head(n_cells_local + 1);
+  auto data1 = cell_nodes.array().head(off1[n_cells_local]);
+  graph::AdjacencyList<std::int64_t> cell_nodes_2(data1, off1);
+
   const Geometry geometry
-      = mesh::create_geometry(comm, topology, layout, cell_nodes, x);
+      = mesh::create_geometry(comm, topology, layout, cell_nodes_2, x);
 
   return Mesh(comm, topology, geometry);
 }
