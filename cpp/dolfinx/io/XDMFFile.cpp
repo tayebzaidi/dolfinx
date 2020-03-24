@@ -136,7 +136,7 @@ mesh::Mesh XDMFFile::read_mesh() const
   const graph::AdjacencyList<std::int32_t> dest
       = mesh::Partitioning::partition_cells(_mpi_comm.comm(), size,
                                             layout.cell_type(), cells_topology,
-                                            mesh::GhostMode::none);
+                                            mesh::GhostMode::shared_facet);
 
   // Distribute cells to destination rank
   const auto [cell_nodes, src, original_cell_index, ghost_owners]
@@ -161,9 +161,17 @@ mesh::Mesh XDMFFile::read_mesh() const
   if (index_map)
     topology.set_index_map(1, index_map);
 
+  // FIXME: improve. Clip cell data, removing any unused ghost cells
+  const int tdim = topology.dim();
+  int n_cells_local = topology.index_map(tdim)->size_local()
+                      + topology.index_map(tdim)->num_ghosts();
+  auto off1 = cell_nodes.offsets().head(n_cells_local + 1);
+  auto data1 = cell_nodes.array().head(off1[n_cells_local]);
+  graph::AdjacencyList<std::int64_t> cell_nodes_2(data1, off1);
+
   // Create Geometry
   const mesh::Geometry geometry = mesh::create_geometry(
-      _mpi_comm.comm(), topology, layout, cell_nodes, x);
+      _mpi_comm.comm(), topology, layout, cell_nodes_2, x);
 
   // Return Mesh
   return mesh::Mesh(_mpi_comm.comm(), topology, geometry);
