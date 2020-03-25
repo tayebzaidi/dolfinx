@@ -216,11 +216,19 @@ void _lift_bc_exterior_facets(
   const Eigen::Array<std::uint32_t, Eigen::Dynamic, 1>& cell_info
       = mesh.topology().get_cell_permutation_info();
 
+  std::set<std::int32_t> fwd_shared_facets(
+      topology.index_map(tdim - 1)->forward_indices().begin(),
+      topology.index_map(tdim - 1)->forward_indices().end());
+  auto f_to_c = topology.connectivity(tdim - 1, tdim);
   for (int f = 0; f < map->size_local(); ++f)
   {
     // Move to next facet if this one is an interior facet
-    if (topology.interior_facets()[f])
+    if (f_to_c->num_links(f) == 2
+        or fwd_shared_facets.find(f) != fwd_shared_facets.end())
       continue;
+
+    //  if (topology.interior_facets()[f])
+    //    continue;
 
     // Create attached cell
     assert(connectivity->num_links(f) == 1);
