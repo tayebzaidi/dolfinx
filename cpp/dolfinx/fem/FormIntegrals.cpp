@@ -143,7 +143,7 @@ void FormIntegrals::set_domains(FormIntegrals::Type type,
       // Check that facet is an exterior facet (and not just on a
       // process boundary)
       if (f_to_c->num_links(i) == 1
-          and fwd_shared_facets.find(i) != fwd_shared_facets.end())
+          and fwd_shared_facets.find(i) == fwd_shared_facets.end())
       {
         auto it = id_to_integral.find(mf_values[i]);
         if (it != id_to_integral.end())
