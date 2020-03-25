@@ -133,12 +133,17 @@ void FormIntegrals::set_domains(FormIntegrals::Type type,
   if (type == Type::exterior_facet)
   {
     mesh->create_connectivity(tdim - 1, tdim);
-    const std::vector<bool>& interior_facets = topology.interior_facets();
+    std::set<std::int32_t> fwd_shared_facets(
+        topology.index_map(tdim - 1)->forward_indices().begin(),
+        topology.index_map(tdim - 1)->forward_indices().end());
+    auto f_to_c = topology.connectivity(tdim - 1, tdim);
+    // const std::vector<bool>& interior_facets = topology.interior_facets();
     for (Eigen::Index i = 0; i < num_entities; ++i)
     {
       // Check that facet is an exterior facet (and not just on a
       // process boundary)
-      if (!interior_facets[i])
+      if (f_to_c->num_links(i) == 1
+          and fwd_shared_facets.find(i) != fwd_shared_facets.end())
       {
         auto it = id_to_integral.find(mf_values[i]);
         if (it != id_to_integral.end())
@@ -205,10 +210,17 @@ void FormIntegrals::set_default_domains(const mesh::Mesh& mesh)
     mesh.create_connectivity(tdim - 1, tdim);
     assert(topology.index_map(tdim - 1));
     const int num_facets = topology.index_map(tdim - 1)->size_local();
-    const std::vector<bool>& interior_facets = topology.interior_facets();
+    std::set<std::int32_t> fwd_shared_facets(
+        topology.index_map(tdim - 1)->forward_indices().begin(),
+        topology.index_map(tdim - 1)->forward_indices().end());
+    auto f_to_c = topology.connectivity(tdim - 1, tdim);
+    // const std::vector<bool>& interior_facets = topology.interior_facets();
     for (int f = 0; f < num_facets; ++f)
     {
-      if (!interior_facets[f])
+      // All "owned" facets connected to one cell, that are not shared,
+      // should be external.
+      if (f_to_c->num_links(f) == 1
+          and fwd_shared_facets.find(f) == fwd_shared_facets.end())
         exf_integrals[0].active_entities.push_back(f);
     }
   }
