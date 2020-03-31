@@ -15,7 +15,7 @@
 #include <dolfinx/function/FunctionSpace.h>
 #include <dolfinx/mesh/Mesh.h>
 #include <dolfinx/mesh/MeshEntity.h>
-#include <dolfinx/mesh/MeshFunction.h>
+#include <dolfinx/mesh/MeshTags.h>
 #include <memory>
 #include <string>
 #include <ufc.h>
@@ -38,7 +38,7 @@ Form::Form(
   // Set _mesh from function::FunctionSpace, and check they are the same
   if (!function_spaces.empty())
     _mesh = function_spaces[0]->mesh();
-  for (auto& V : function_spaces)
+  for (const auto & V : function_spaces)
   {
     if (_mesh != V->mesh())
       throw std::runtime_error("Incompatible mesh");
@@ -65,7 +65,7 @@ void Form::set_coefficients(
     std::map<std::size_t, std::shared_ptr<const function::Function>>
         coefficients)
 {
-  for (auto c : coefficients)
+  for (const auto& c : coefficients)
     _coefficients.set(c.first, c.second);
 }
 //-----------------------------------------------------------------------------
@@ -73,7 +73,7 @@ void Form::set_coefficients(
     std::map<std::string, std::shared_ptr<const function::Function>>
         coefficients)
 {
-  for (auto c : coefficients)
+  for (const auto& c : coefficients)
     _coefficients.set(c.first, c.second);
 }
 //-----------------------------------------------------------------------------
@@ -120,7 +120,7 @@ void Form::set_constants(
 //-----------------------------------------------------------------------------
 bool Form::all_constants_set() const
 {
-  for (auto& constant : _constants)
+  for (const auto & constant : _constants)
     if (!constant.second)
       return false;
 
@@ -130,7 +130,7 @@ bool Form::all_constants_set() const
 std::set<std::string> Form::get_unset_constants() const
 {
   std::set<std::string> unset;
-  for (auto& constant : _constants)
+  for (const auto & constant : _constants)
   {
     if (!constant.second)
       unset.insert(constant.first);
@@ -168,27 +168,26 @@ void Form::set_tabulate_tensor(
     _integrals.set_default_domains(*_mesh);
 }
 //-----------------------------------------------------------------------------
-void Form::set_cell_domains(const mesh::MeshFunction<std::size_t>& cell_domains)
+void Form::set_cell_domains(const mesh::MeshTags<int>& cell_domains)
 {
   _integrals.set_domains(FormIntegrals::Type::cell, cell_domains);
 }
 //-----------------------------------------------------------------------------
 void Form::set_exterior_facet_domains(
-    const mesh::MeshFunction<std::size_t>& exterior_facet_domains)
+    const mesh::MeshTags<int>& exterior_facet_domains)
 {
   _integrals.set_domains(FormIntegrals::Type::exterior_facet,
                          exterior_facet_domains);
 }
 //-----------------------------------------------------------------------------
 void Form::set_interior_facet_domains(
-    const mesh::MeshFunction<std::size_t>& interior_facet_domains)
+    const mesh::MeshTags<int>& interior_facet_domains)
 {
   _integrals.set_domains(FormIntegrals::Type::interior_facet,
                          interior_facet_domains);
 }
 //-----------------------------------------------------------------------------
-void Form::set_vertex_domains(
-    const mesh::MeshFunction<std::size_t>& vertex_domains)
+void Form::set_vertex_domains(const mesh::MeshTags<int>& vertex_domains)
 {
   _integrals.set_domains(FormIntegrals::Type::vertex, vertex_domains);
 }

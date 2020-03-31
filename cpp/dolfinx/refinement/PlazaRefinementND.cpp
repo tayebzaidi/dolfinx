@@ -374,13 +374,13 @@ face_long_edge(const mesh::Mesh& mesh)
     auto edge_vertices = e_to_v->links(e);
 
     // Find local index of edge vertices in the cell geometry map
-    auto it0 = std::find(cell_vertices.data(),
+    const auto *it0 = std::find(cell_vertices.data(),
                          cell_vertices.data() + cell_vertices.rows(),
                          edge_vertices[0]);
     assert(it0 != (cell_vertices.data() + cell_vertices.rows()));
     const int local0 = std::distance(cell_vertices.data(), it0);
 
-    auto it1 = std::find(cell_vertices.data(),
+    const auto *it1 = std::find(cell_vertices.data(),
                          cell_vertices.data() + cell_vertices.rows(),
                          edge_vertices[1]);
     assert(it1 != (cell_vertices.data() + cell_vertices.rows()));
@@ -461,7 +461,7 @@ mesh::Mesh PlazaRefinementND::refine(const mesh::Mesh& mesh, bool redistribute)
 //-----------------------------------------------------------------------------
 mesh::Mesh
 PlazaRefinementND::refine(const mesh::Mesh& mesh,
-                          const mesh::MeshFunction<int>& refinement_marker,
+                          const mesh::MeshTags<std::int8_t>& refinement_marker,
                           bool redistribute)
 {
   if (mesh.topology().cell_type() != mesh::CellType::triangle

@@ -495,7 +495,7 @@ Topology mesh::create_topology(
       }
     }
     send_pairs = std::vector<std::vector<std::int64_t>>(neighbours.size());
-    for (auto q : fwd_shared_vertices)
+    for (const auto& q : fwd_shared_vertices)
     {
       auto it = global_to_local_index.find(q.first);
       assert(it != global_to_local_index.end());
