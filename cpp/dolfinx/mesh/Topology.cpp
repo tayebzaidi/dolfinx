@@ -420,7 +420,7 @@ Topology mesh::create_topology(
 
   // Find all vertex-sharing neighbours, and process-to-neighbour map
   std::set<int> vertex_neighbours;
-  for (const auto q : global_to_procs)
+  for (const auto& q : global_to_procs)
     vertex_neighbours.insert(q.second.begin(), q.second.end());
   vertex_neighbours.erase(mpi_rank);
   std::vector<int> neighbours(vertex_neighbours.begin(),
