@@ -160,7 +160,9 @@ def _(b: PETSc.Vec,
     """
     maps = [form.function_space(0).dofmap.index_map for form in _create_cpp_form(L)]
     if x0 is not None:
+        print(MPI.comm_world.rank, "calling get local vecs")
         x0_local = cpp.la.get_local_vectors(x0, maps)
+        print(MPI.comm_world.rank, "call to get local vecs done")
         x0_sub = x0_local
     else:
         x0_local = []
