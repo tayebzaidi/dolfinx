@@ -11,7 +11,7 @@ import typing
 from petsc4py import PETSc
 
 import ufl
-from dolfinx import cpp
+from dolfinx import cpp, MPI
 from dolfinx.fem.dirichletbc import DirichletBC
 from dolfinx.fem.form import Form
 
@@ -142,6 +142,7 @@ def assemble_vector_block(L: typing.List[typing.Union[Form, cpp.fem.Form]],
     maps = [form.function_space(0).dofmap.index_map for form in _create_cpp_form(L)]
     b = cpp.fem.create_vector_block(maps)
     b.set(0.0)
+    print(MPI.comm_world.rank, "assemble_vector_block called")
     return assemble_vector_block(b, L, a, bcs, x0, scale)
 
 
@@ -165,11 +166,15 @@ def _(b: PETSc.Vec,
         x0_local = []
         x0_sub = [None] * len(maps)
 
+    print(MPI.comm_world.rank, "got local vecs")
+
     bcs1 = cpp.fem.bcs_cols(_create_cpp_form(a), bcs)
     b_local = cpp.la.get_local_vectors(b, maps)
     for b_sub, L_sub, a_sub, bc in zip(b_local, L, a, bcs1):
         cpp.fem.assemble_vector(b_sub, _create_cpp_form(L_sub))
         cpp.fem.apply_lifting(b_sub, _create_cpp_form(a_sub), bc, x0_local, scale)
+
+    print(MPI.comm_world, "assembled subbvectors and applied lifting")
 
     cpp.la.scatter_local_vectors(b, b_local, maps)
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
@@ -181,6 +186,8 @@ def _(b: PETSc.Vec,
         size = submap.size_local * submap.block_size
         cpp.fem.set_bc(b_array[offset:offset + size], bc, _x0, scale)
         offset += size
+
+    print(MPI.comm_world, "set bc")
 
     return b
 
