@@ -20,9 +20,7 @@ def _create_cpp_form(form):
     """Recursively look for ufl.Forms and convert to dolfinx.fem.Form, otherwise
     return form argument
     """
-    if isinstance(form, Form):
-        return form._cpp_object
-    elif isinstance(form, ufl.Form):
+    if isinstance(form, ufl.Form):
         return Form(form)._cpp_object
     elif isinstance(form, (tuple, list)):
         return list(map(lambda sub_form: _create_cpp_form(sub_form), form))
@@ -159,6 +157,8 @@ def _(b: PETSc.Vec,
 
     """
     maps = [form.function_space(0).dofmap.index_map for form in _create_cpp_form(L)]
+
+    print(MPI.comm_world.rank, "index maps ready")
     if x0 is not None:
         print(MPI.comm_world.rank, "calling get local vecs")
         x0_local = cpp.la.get_local_vectors(x0, maps)

@@ -11,7 +11,7 @@ import ufl
 from dolfinx import cpp, fem, jit
 
 
-class Form:
+class Form(ufl.Form):
     def __init__(self, form: ufl.Form, form_compiler_parameters: dict = None):
         """Create dolfinx Form
 
