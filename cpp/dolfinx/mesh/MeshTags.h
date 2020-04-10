@@ -117,7 +117,7 @@ private:
     std::vector<int> perm(_indices.size());
     std::iota(perm.begin(), perm.end(), 0);
     std::sort(perm.begin(), perm.end(),
-              [&indices = std::as_const(_indices)](const int a, const int b) {
+              [& indices = std::as_const(_indices)](const int a, const int b) {
                 return (indices[a] < indices[b]);
               });
 
@@ -267,6 +267,15 @@ create_meshtags(MPI_Comm comm, const std::shared_ptr<const mesh::Mesh>& mesh,
   std::vector<std::vector<T>> send_vals_owned(comm_size);
   const int nnodes_per_entity = entities.cols();
 
+  // Prepare a mapping from node to vector of all its owners
+  std::unordered_map<std::int64_t, std::vector<int>> nodes_g_owners;
+  for (int p = 0; p < nodes_g_recv.num_nodes(); ++p)
+  {
+    auto igi = nodes_g_recv.links(p);
+    for (int j = 0; j < igi.size(); ++j)
+      nodes_g_owners[igi(j)].push_back(p);
+  }
+
   // Loop over process ranks
   for (int p = 0; p < entities_recv.num_nodes(); ++p)
   {
@@ -276,21 +285,20 @@ create_meshtags(MPI_Comm comm, const std::shared_ptr<const mesh::Mesh>& mesh,
     // Loop over received entities
     for (int e = 0; e < nodes.size() / nnodes_per_entity; ++e)
     {
+      std::vector<bool> sent(nnodes_per_entity, false);
       std::vector<std::int64_t> entity(nodes.data() + e * nnodes_per_entity,
                                        nodes.data() + e * nnodes_per_entity
                                            + nnodes_per_entity);
-
-      // Loop over process ranks
-      for (int q = 0; q < nodes_g_recv.num_nodes(); ++q)
+      for (int i = 0; i < nnodes_per_entity; ++i)
       {
-        auto igi = nodes_g_recv.links(q);
-        for (int j = 0; j < igi.size(); ++j)
+        for (const auto owner : nodes_g_owners[entity[i]])
         {
-          if (igi[j] == entity[0])
+          if (!sent[owner])
           {
-            send_nodes_owned[q].insert(send_nodes_owned[q].end(),
-                                       entity.begin(), entity.end());
-            send_vals_owned[q].push_back(vals(e));
+            send_nodes_owned[owner].insert(send_nodes_owned[owner].end(),
+                                           entity.begin(), entity.end());
+            send_vals_owned[owner].push_back(vals(e));
+            sent[owner] = true;
           }
         }
       }
