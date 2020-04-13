@@ -89,6 +89,8 @@ public:
   /// @return The vector of expansion coefficients
   const la::PETScVector& vector() const;
 
+  const std::vector<PetscScalar>& array() const { return _vec; }
+
   /// Interpolate a Function (on possibly non-matching meshes)
   /// @param[in] v The function to be interpolated.
   void interpolate(const Function& v);

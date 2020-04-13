@@ -171,9 +171,10 @@ la::SparsityPattern dolfinx::fem::create_sparsity_pattern(const Form& a)
 
   if (a.integrals().num_integrals(fem::FormIntegrals::Type::interior_facet) > 0)
   {
-  // FIXME: cleanup these calls? Some of the happen internally again.
+    // FIXME: cleanup these calls? Some of the happen internally again.
     mesh.topology_mutable().create_entities(mesh.topology().dim() - 1);
-    mesh.topology_mutable().create_connectivity(mesh.topology().dim() - 1, mesh.topology().dim());
+    mesh.topology_mutable().create_connectivity(mesh.topology().dim() - 1,
+                                                mesh.topology().dim());
     SparsityPatternBuilder::interior_facets(pattern, mesh.topology(),
                                             {{dofmaps[0], dofmaps[1]}});
   }
@@ -182,7 +183,8 @@ la::SparsityPattern dolfinx::fem::create_sparsity_pattern(const Form& a)
   {
     // FIXME: cleanup these calls? Some of the happen internally again.
     mesh.topology_mutable().create_entities(mesh.topology().dim() - 1);
-    mesh.topology_mutable().create_connectivity(mesh.topology().dim() - 1, mesh.topology().dim());
+    mesh.topology_mutable().create_connectivity(mesh.topology().dim() - 1,
+                                                mesh.topology().dim());
     SparsityPatternBuilder::exterior_facets(pattern, mesh.topology(),
                                             {{dofmaps[0], dofmaps[1]}});
   }
@@ -737,17 +739,6 @@ fem::pack_coefficients(const fem::Form& form)
   const mesh::Mesh& mesh = *form.mesh();
   const int tdim = mesh.topology().dim();
 
-  // Unwrap PETSc vectors
-  std::vector<const PetscScalar*> v(coefficients.size(), nullptr);
-  std::vector<Vec> x(coefficients.size(), nullptr),
-      x_local(coefficients.size(), nullptr);
-  for (std::size_t i = 0; i < v.size(); ++i)
-  {
-    x[i] = coefficients.get(i)->vector().vec();
-    VecGhostGetLocalForm(x[i], &x_local[i]);
-    VecGetArrayRead(x_local[i], &v[i]);
-  }
-
   const int num_cells = mesh.topology().index_map(tdim)->size_local()
                         + mesh.topology().index_map(tdim)->num_ghosts();
 
@@ -761,18 +752,11 @@ fem::pack_coefficients(const fem::Form& form)
       for (std::size_t coeff = 0; coeff < dofmaps.size(); ++coeff)
       {
         auto dofs = dofmaps[coeff]->cell_dofs(cell);
-        const PetscScalar* _v = v[coeff];
+        const std::vector<PetscScalar>& v = coefficients.get(coeff)->array();
         for (Eigen::Index k = 0; k < dofs.size(); ++k)
-          c(cell, k + offsets[coeff]) = _v[dofs[k]];
+          c(cell, k + offsets[coeff]) = v[dofs[k]];
       }
     }
-  }
-
-  // Restore PETSc vectors
-  for (std::size_t i = 0; i < v.size(); ++i)
-  {
-    VecRestoreArrayRead(x_local[i], &v[i]);
-    VecGhostRestoreLocalForm(x[i], &x_local[i]);
   }
 
   return c;

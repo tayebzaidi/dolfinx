@@ -253,8 +253,8 @@ Eigen::Array<std::int32_t, Eigen::Dynamic, 2> _locate_dofs_topological(
 
     // Get local index of facet with respect to the cell
     auto entities_d = c_to_e->links(cell);
-    const auto *it = std::find(entities_d.data(),
-                        entities_d.data() + entities_d.rows(), entities[e]);
+    const auto* it = std::find(
+        entities_d.data(), entities_d.data() + entities_d.rows(), entities[e]);
     assert(it != (entities_d.data() + entities_d.rows()));
     const int entity_local_index = std::distance(entities_d.data(), it);
 
@@ -349,8 +349,8 @@ _locate_dofs_topological(const function::FunctionSpace& V, const int entity_dim,
 
     // Get local index of facet with respect to the cell
     auto entities_d = c_to_e->links(cell);
-    const auto *it = std::find(entities_d.data(),
-                        entities_d.data() + entities_d.rows(), entities[i]);
+    const auto* it = std::find(
+        entities_d.data(), entities_d.data() + entities_d.rows(), entities[i]);
     assert(it != (entities_d.data() + entities_d.rows()));
     const int entity_local_index = std::distance(entities_d.data(), it);
 
@@ -545,8 +545,8 @@ DirichletBC::DirichletBC(
 
   const int owned_size = _function_space->dofmap()->index_map->block_size()
                          * _function_space->dofmap()->index_map->size_local();
-  auto *it = std::lower_bound(_dofs.col(0).data(),
-                             _dofs.col(0).data() + _dofs.rows(), owned_size);
+  auto* it = std::lower_bound(_dofs.col(0).data(),
+                              _dofs.col(0).data() + _dofs.rows(), owned_size);
   _owned_indices = std::distance(_dofs.col(0).data(), it);
 }
 //-----------------------------------------------------------------------------
@@ -559,8 +559,8 @@ DirichletBC::DirichletBC(
 {
   const int owned_size = _function_space->dofmap()->index_map->block_size()
                          * _function_space->dofmap()->index_map->size_local();
-  auto *it = std::lower_bound(_dofs.col(0).data(),
-                             _dofs.col(0).data() + _dofs.rows(), owned_size);
+  auto* it = std::lower_bound(_dofs.col(0).data(),
+                              _dofs.col(0).data() + _dofs.rows(), owned_size);
   _owned_indices = std::distance(_dofs.col(0).data(), it);
 }
 //-----------------------------------------------------------------------------
@@ -592,11 +592,12 @@ void DirichletBC::set(
 {
   // FIXME: This one excludes ghosts. Need to straighten out.
   assert(_g);
-  la::VecReadWrapper g(_g->vector().vec(), false);
+
+  const std::vector<PetscScalar>& xg = _g->array();
   for (Eigen::Index i = 0; i < _dofs.rows(); ++i)
   {
     if (_dofs(i, 0) < x.rows())
-      x[_dofs(i, 0)] = scale * g.x[_dofs(i, 1)];
+      x[_dofs(i, 0)] = scale * xg[_dofs(i, 1)];
   }
 }
 //-----------------------------------------------------------------------------
@@ -608,11 +609,11 @@ void DirichletBC::set(
   // FIXME: This one excludes ghosts. Need to straighten out.
   assert(_g);
   assert(x.rows() <= x0.rows());
-  la::VecReadWrapper g(_g->vector().vec(), false);
+  const std::vector<PetscScalar>& xg = _g->array();
   for (Eigen::Index i = 0; i < _dofs.rows(); ++i)
   {
     if (_dofs(i, 0) < x.rows())
-      x[_dofs(i, 0)] = scale * (g.x[_dofs(i, 1)] - x0[_dofs(i, 0)]);
+      x[_dofs(i, 0)] = scale * (xg[_dofs(i, 1)] - x0[_dofs(i, 0)]);
   }
 }
 //-----------------------------------------------------------------------------
@@ -620,9 +621,9 @@ void DirichletBC::dof_values(
     Eigen::Ref<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> values) const
 {
   assert(_g);
-  la::VecReadWrapper g(_g->vector().vec());
+  const std::vector<PetscScalar>& xg = _g->array();
   for (Eigen::Index i = 0; i < _dofs.rows(); ++i)
-    values[_dofs(i, 0)] = g.x[_dofs(i, 1)];
+    values[_dofs(i, 0)] = xg[_dofs(i, 1)];
 }
 //-----------------------------------------------------------------------------
 void DirichletBC::mark_dofs(std::vector<bool>& markers) const
