@@ -51,7 +51,7 @@ public:
   ///
   /// @param[in] V The function space
   /// @param[in] x The vector
-  Function(std::shared_ptr<const FunctionSpace> V, Vec x);
+  Function(std::shared_ptr<const FunctionSpace> V, std::vector<PetscScalar> x);
 
   // Copy constructor
   Function(const Function& v) = delete;
@@ -83,7 +83,7 @@ public:
 
   /// Return vector of expansion coefficients (non-const version)
   /// @return The vector of expansion coefficients
-  la::PETScVector& vector();
+  // la::PETScVector& vector();
 
   /// Return vector of expansion coefficients (const version)
   /// @return The vector of expansion coefficients
@@ -161,6 +161,9 @@ private:
 
   // The function space
   std::shared_ptr<const FunctionSpace> _function_space;
+
+  // Storage
+  std::vector<PetscScalar> _vec;
 
   // The vector of expansion coefficients (local)
   la::PETScVector _vector;

@@ -36,7 +36,6 @@ void function(py::module& m)
       m, "Function", "A finite element function")
       .def(py::init<std::shared_ptr<const dolfinx::function::FunctionSpace>>(),
            "Create a function on the given function space")
-      .def(py::init<std::shared_ptr<dolfinx::function::FunctionSpace>, Vec>())
       .def_readwrite("name", &dolfinx::function::Function::name)
       .def_property_readonly("id", &dolfinx::function::Function::id)
       .def("sub", &dolfinx::function::Function::sub,
@@ -54,23 +53,24 @@ void function(py::module& m)
            py::overload_cast<const dolfinx::function::Function&>(
                &dolfinx::function::Function::interpolate),
            py::arg("u"), "Interpolate a finite element function")
-      .def("interpolate_ptr",
-           [](dolfinx::function::Function& self, std::uintptr_t addr) {
-             const std::function<void(PetscScalar*, int, int, const double*)> f
-                 = reinterpret_cast<void (*)(PetscScalar*, int, int,
-                                             const double*)>(addr);
-             auto _f =
-                 [&f](Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
-                                              Eigen::Dynamic, Eigen::RowMajor>>
-                          values,
-                      const Eigen::Ref<const Eigen::Array<
-                          double, Eigen::Dynamic, 3, Eigen::RowMajor>>& x) {
-                   f(values.data(), values.rows(), values.cols(), x.data());
-                 };
+      .def(
+          "interpolate_ptr",
+          [](dolfinx::function::Function& self, std::uintptr_t addr) {
+            const std::function<void(PetscScalar*, int, int, const double*)> f
+                = reinterpret_cast<void (*)(PetscScalar*, int, int,
+                                            const double*)>(addr);
+            auto _f
+                = [&f](Eigen::Ref<Eigen::Array<PetscScalar, Eigen::Dynamic,
+                                               Eigen::Dynamic, Eigen::RowMajor>>
+                           values,
+                       const Eigen::Ref<const Eigen::Array<
+                           double, Eigen::Dynamic, 3, Eigen::RowMajor>>& x) {
+                    f(values.data(), values.rows(), values.cols(), x.data());
+                  };
 
-             self.interpolate_c(_f);
-           },
-           "Interpolate using a pointer to an expression with a C signature")
+            self.interpolate_c(_f);
+          },
+          "Interpolate using a pointer to an expression with a C signature")
       .def_property_readonly(
           "vector",
           [](const dolfinx::function::Function&
@@ -107,7 +107,8 @@ void function(py::module& m)
       .def_property_readonly("element",
                              &dolfinx::function::FunctionSpace::element)
       .def_property_readonly("mesh", &dolfinx::function::FunctionSpace::mesh)
-      .def_property_readonly("dofmap", &dolfinx::function::FunctionSpace::dofmap)
+      .def_property_readonly("dofmap",
+                             &dolfinx::function::FunctionSpace::dofmap)
       .def("set_x", &dolfinx::function::FunctionSpace::set_x)
       .def("sub", &dolfinx::function::FunctionSpace::sub)
       .def("tabulate_dof_coordinates",
@@ -119,10 +120,11 @@ void function(py::module& m)
       m, "Constant", "A value constant with respect to integration domain")
       .def(py::init<std::vector<int>, std::vector<PetscScalar>>(),
            "Create a constant from a scalar value array")
-      .def("value",
-           [](dolfinx::function::Constant& self) {
-             return py::array(self.shape, self.value.data(), py::none());
-           },
-           py::return_value_policy::reference_internal);
+      .def(
+          "value",
+          [](dolfinx::function::Constant& self) {
+            return py::array(self.shape, self.value.data(), py::none());
+          },
+          py::return_value_policy::reference_internal);
 }
 } // namespace dolfinx_wrappers

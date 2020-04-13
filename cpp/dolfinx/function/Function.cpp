@@ -28,11 +28,19 @@
 using namespace dolfinx;
 using namespace dolfinx::function;
 
+#define CHECK_ERROR(NAME)                                                      \
+  do                                                                           \
+  {                                                                            \
+    if (ierr != 0)                                                             \
+      la::petsc_error(ierr, __FILE__, NAME);                                   \
+  } while (0)
+
 namespace
 {
 //-----------------------------------------------------------------------------
 // Create a vector with layout from dofmap, and zero.
-la::PETScVector create_vector(const function::FunctionSpace& V)
+la::PETScVector create_vector(const function::FunctionSpace& V,
+                              std::vector<PetscScalar>& vec)
 {
   common::Timer timer("Init dof vector");
 
@@ -51,11 +59,46 @@ la::PETScVector create_vector(const function::FunctionSpace& V)
   }
 
   assert(dofmap.index_map);
-  la::PETScVector v = la::PETScVector(*dofmap.index_map);
-  la::VecWrapper _v(v.vec());
-  _v.x.setZero();
 
-  return v;
+  auto ghost_indices = dofmap.index_map->ghosts();
+  int block_size = dofmap.index_map->block_size();
+  int local_size = dofmap.index_map->size_local();
+  MPI_Comm comm = dofmap.index_map->mpi_comm();
+  std::array<std::int64_t, 2> range = dofmap.index_map->local_range();
+
+  Vec v;
+  std::vector<PetscInt> _ghost_indices(ghost_indices.rows());
+  for (std::size_t i = 0; i < _ghost_indices.size(); ++i)
+    _ghost_indices[i] = ghost_indices(i);
+  PetscErrorCode ierr = VecCreateGhostBlockWithArray(
+      comm, block_size, block_size * local_size, PETSC_DECIDE,
+      _ghost_indices.size(), _ghost_indices.data(), vec.data(), &v);
+  CHECK_ERROR("VecCreateGhostBlockWithArray");
+  assert(v);
+
+  // Set from PETSc options. This will set the vector type.
+  // ierr = VecSetFromOptions(_x);
+  // CHECK_ERROR("VecSetFromOptions");
+
+  // NOTE: shouldn't need to do this, but there appears to be an issue
+  // with PETSc
+  // (https://lists.mcs.anl.gov/pipermail/petsc-dev/2018-May/022963.html)
+  // Set local-to-global map
+  std::vector<PetscInt> l2g(local_size + ghost_indices.size());
+  std::iota(l2g.begin(), l2g.begin() + local_size, range[0]);
+  std::copy(ghost_indices.data(), ghost_indices.data() + ghost_indices.size(),
+            l2g.begin() + local_size);
+  ISLocalToGlobalMapping petsc_local_to_global;
+  ierr = ISLocalToGlobalMappingCreate(PETSC_COMM_SELF, block_size, l2g.size(),
+                                      l2g.data(), PETSC_COPY_VALUES,
+                                      &petsc_local_to_global);
+  CHECK_ERROR("ISLocalToGlobalMappingCreate");
+  ierr = VecSetLocalToGlobalMapping(v, petsc_local_to_global);
+  CHECK_ERROR("VecSetLocalToGlobalMapping");
+  ierr = ISLocalToGlobalMappingDestroy(&petsc_local_to_global);
+  CHECK_ERROR("ISLocalToGlobalMappingDestroy");
+
+  return la::PETScVector(v, true);
 }
 //-----------------------------------------------------------------------------
 } // namespace
@@ -63,7 +106,11 @@ la::PETScVector create_vector(const function::FunctionSpace& V)
 //-----------------------------------------------------------------------------
 Function::Function(std::shared_ptr<const FunctionSpace> V)
     : _id(common::UniqueIdGenerator::id()), _function_space(V),
-      _vector(create_vector(*V))
+      _vec(V->dofmap()->index_map->block_size()
+               * (V->dofmap()->index_map->size_local()
+                  + V->dofmap()->index_map->num_ghosts()),
+           0.0),
+      _vector(create_vector(*V, _vec))
 {
   // Check that we don't have a subspace
   if (!V->component().empty())
@@ -73,9 +120,12 @@ Function::Function(std::shared_ptr<const FunctionSpace> V)
   }
 }
 //-----------------------------------------------------------------------------
-Function::Function(std::shared_ptr<const FunctionSpace> V, Vec x)
-    : _id(common::UniqueIdGenerator::id()), _function_space(V), _vector(x, true)
+Function::Function(std::shared_ptr<const FunctionSpace> V,
+                   std::vector<PetscScalar> x)
+    : _id(common::UniqueIdGenerator::id()), _function_space(V), _vec(x),
+      _vector(create_vector(*V, _vec))
 {
+
   // We do not check for a subspace since this constructor is used for
   // creating subfunctions
 
@@ -93,7 +143,7 @@ Function Function::sub(int i) const
 
   // Return sub-function
   assert(sub_space);
-  return Function(sub_space, _vector.vec());
+  return Function(sub_space, _vec);
 }
 //-----------------------------------------------------------------------------
 Function Function::collapse() const
@@ -103,24 +153,19 @@ Function Function::collapse() const
 
   // Create new vector
   assert(function_space_new);
-  la::PETScVector vector_new = create_vector(*function_space_new);
-
-  // Wrap PETSc vectors using Eigen
-  la::VecReadWrapper v_wrap(_vector.vec());
-  Eigen::Map<const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> x_old
-      = v_wrap.x;
-  la::VecWrapper v_new(vector_new.vec());
-  Eigen::Map<Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> x_new = v_new.x;
+  auto im_new = function_space_new->dofmap()->index_map;
+  std::vector<PetscScalar> vector_new(
+      im_new->block_size() * (im_new->size_local() + im_new->num_ghosts()));
 
   // Copy values into new vector
   for (std::size_t i = 0; i < collapsed_map.size(); ++i)
   {
-    assert((int)i < x_new.size());
-    assert(collapsed_map[i] < x_old.size());
-    x_new[i] = x_old[collapsed_map[i]];
+    assert(i < vector_new.size());
+    assert(collapsed_map[i] < (int)_vec.size());
+    vector_new[i] = _vec[collapsed_map[i]];
   }
 
-  return Function(function_space_new, vector_new.vec());
+  return Function(function_space_new, vector_new);
 }
 //-----------------------------------------------------------------------------
 std::shared_ptr<const FunctionSpace> Function::function_space() const
@@ -128,21 +173,21 @@ std::shared_ptr<const FunctionSpace> Function::function_space() const
   return _function_space;
 }
 //-----------------------------------------------------------------------------
-la::PETScVector& Function::vector()
-{
-  // Check that this is not a sub function.
-  assert(_function_space->dofmap());
-  assert(_function_space->dofmap()->index_map);
-  if (_vector.size()
-      != _function_space->dofmap()->index_map->size_global()
-             * _function_space->dofmap()->index_map->block_size())
-  {
-    throw std::runtime_error(
-        "Cannot access a non-const vector from a subfunction");
-  }
+// la::PETScVector& Function::vector()
+// {
+//   // Check that this is not a sub function.
+//   assert(_function_space->dofmap());
+//   assert(_function_space->dofmap()->index_map);
+//   if (_vector.size()
+//       != _function_space->dofmap()->index_map->size_global()
+//              * _function_space->dofmap()->index_map->block_size())
+//   {
+//     throw std::runtime_error(
+//         "Cannot access a non-const vector from a subfunction");
+//   }
 
-  return _vector;
-}
+//   return _vector;
+// }
 //-----------------------------------------------------------------------------
 const la::PETScVector& Function::vector() const { return _vector; }
 //-----------------------------------------------------------------------------
@@ -222,8 +267,9 @@ void Function::eval(
 
   // Loop over points
   u.setZero();
-  la::VecReadWrapper v(_vector.vec());
-  Eigen::Map<const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> _v = v.x;
+  Eigen::Map<const Eigen::Array<PetscScalar, Eigen::Dynamic, 1>> _v(
+      _vec.data(), _vec.size());
+
   for (Eigen::Index p = 0; p < cells.rows(); ++p)
   {
     const int cell_index = cells(p);
@@ -268,8 +314,9 @@ void Function::eval(
 void Function::interpolate(const Function& v)
 {
   assert(_function_space);
-  la::VecWrapper x(_vector.vec());
-  _function_space->interpolate(x.x, v);
+  Eigen::Map<Eigen::Array<PetscScalar, Eigen::Dynamic, 1>> x(_vec.data(),
+                                                             _vec.size());
+  _function_space->interpolate(x, v);
 }
 //-----------------------------------------------------------------------------
 void Function::interpolate(
@@ -278,14 +325,17 @@ void Function::interpolate(
         const Eigen::Ref<const Eigen::Array<double, 3, Eigen::Dynamic,
                                             Eigen::RowMajor>>&)>& f)
 {
-  la::VecWrapper x(_vector.vec());
-  _function_space->interpolate(x.x, f);
+  Eigen::Map<Eigen::Array<PetscScalar, Eigen::Dynamic, 1>> x(_vec.data(),
+                                                             _vec.size());
+  _function_space->interpolate(x, f);
 }
 //-----------------------------------------------------------------------------
 void Function::interpolate_c(const FunctionSpace::interpolation_function& f)
 {
-  la::VecWrapper x(_vector.vec());
-  _function_space->interpolate_c(x.x, f);
+
+  Eigen::Map<Eigen::Array<PetscScalar, Eigen::Dynamic, 1>> x(_vec.data(),
+                                                             _vec.size());
+  _function_space->interpolate_c(x, f);
 }
 //-----------------------------------------------------------------------------
 int Function::value_rank() const

@@ -15,11 +15,6 @@
 namespace dolfinx
 {
 
-namespace function
-{
-class Function;
-}
-
 namespace mesh
 {
 class Mesh;
