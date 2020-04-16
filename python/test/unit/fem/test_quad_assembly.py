@@ -44,11 +44,22 @@ def get_mesh(cell_type, datadir):
             return xdmf.read_mesh(name="Grid")
 
 
-# Run tests on all spaces in periodic table on triangles and tetrahedra
 @pytest.mark.parametrize("family", ["RTCF"])
 @pytest.mark.parametrize("degree", [1])
-def test_P_simplex(family, degree, datadir):
+def test_RTCF_div(family, degree, datadir):
     mesh = get_mesh(CellType.quadrilateral, datadir)
+    V = FunctionSpace(mesh, (family, degree))
+
+    v = TestFunction(V)
+    a = div(v) * dx
+    assemble_vector(a)
+
+
+@pytest.mark.parametrize("family", ["RT"])
+@pytest.mark.parametrize("degree", [1, 2])
+@pytest.mark.parametrize("cell_type", [CellType.triangle, CellType.tetrahedron])
+def test_RT_div(cell_type, family, degree, datadir):
+    mesh = get_mesh(cell_type, datadir)
     V = FunctionSpace(mesh, (family, degree))
 
     v = TestFunction(V)
