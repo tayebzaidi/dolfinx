@@ -6,10 +6,10 @@
 
 #pragma once
 
-#include "HDF5File.h"
 #include <Eigen/Dense>
-#include <dolfinx/common/MPI.h>
 #include <dolfinx/mesh/cell_types.h>
+#include <hdf5.h>
+#include <mpi.h>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -29,10 +29,8 @@ class Mesh;
 class Topology;
 } // namespace mesh
 
-namespace io
-{
 /// Low-level methods for reading XDMF files
-namespace xdmf_mesh
+namespace io::xdmf_mesh
 {
 
 /// Add Mesh to xml node
@@ -65,13 +63,12 @@ void add_geometry_data(MPI_Comm comm, pugi::xml_node& xml_node,
                        const mesh::Geometry& geometry);
 
 /// Read Topology and Geometry arrays
-/// @returns (cell type, geometry, topology)
+/// @returns ((cell type, degree), geometry, topology)
 std::tuple<
-    mesh::CellType,
+    std::pair<mesh::CellType, int>,
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>,
     Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
 read_mesh_data(MPI_Comm comm, const hid_t h5_id, const pugi::xml_node& node);
 
-} // namespace xdmf_mesh
-} // namespace io
+} // namespace io::xdmf_mesh
 } // namespace dolfinx

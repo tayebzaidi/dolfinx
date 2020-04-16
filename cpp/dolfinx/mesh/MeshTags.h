@@ -9,13 +9,15 @@
 #include "Geometry.h"
 #include "Mesh.h"
 #include "Topology.h"
+#include <algorithm>
 #include <dolfinx/common/IndexMap.h>
 #include <dolfinx/common/UniqueIdGenerator.h>
+#include <dolfinx/common/utils.h>
+#include <dolfinx/graph/AdjacencyList.h>
 #include <dolfinx/graph/Partitioning.h>
 #include <dolfinx/io/cells.h>
 #include <map>
 #include <memory>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -24,10 +26,10 @@ namespace dolfinx
 namespace mesh
 {
 
-/// A MeshTags is a class used to associate mesh entities with values.
-/// The entity index (local to process) identifies the entity. MeshTags
-/// is a sparse data storage class; it allows tags to be associated with
-/// an arbitrary subset of mesh entities. An entity can have only one
+/// A MeshTags are used to associate mesh entities with values. The
+/// entity index (local to process) identifies the entity. MeshTags is a
+/// sparse data storage class; it allows tags to be associated with an
+/// arbitrary subset of mesh entities. An entity can have only one
 /// associated tag.
 /// @tparam Type
 template <typename T>
@@ -35,17 +37,15 @@ class MeshTags
 {
 public:
   /// Create from entities of given dimension on a mesh
-  /// @param[in] mesh The mesh associated with the tags
+  /// @param[in] mesh The mesh on which the tags are associated
   /// @param[in] dim Topological dimension of mesh entities to tag
-  /// @param[in] indices std::vector<std::int32> of entity indices
-  ///   (indices local to the process)
+  /// @param[in] indices std::vector<std::int32> of sorted and unique
+  ///   entity indices (indices local to the process)
   /// @param[in] values std::vector<T> of values for each index in
-  ///   indices
-  /// @param[in] sorted True for already sorted indices
-  /// @param[in] unique True for unique indices
+  ///   indices. The size must be equal to the size of @p indices.
   template <typename U, typename V>
   MeshTags(const std::shared_ptr<const Mesh>& mesh, int dim, U&& indices,
-           V&& values, const bool sorted = false, const bool unique = false)
+           V&& values)
       : _mesh(mesh), _dim(dim), _indices(std::forward<U>(indices)),
         _values(std::forward<V>(values))
   {
@@ -54,10 +54,12 @@ public:
       throw std::runtime_error(
           "Indices and values arrays must have same size.");
     }
-    if (!sorted)
-      sort();
-    if (!unique)
-      remove_duplicates();
+#ifdef DEBUG
+    if (!std::is_sorted(_indices.begin(), _indices.end()))
+      throw std::runtime_error("MeshTag data is not sorted");
+    if (std::adjacent_find(_indices.begin(), _indices.end()) != _indices.end())
+      throw std::runtime_error("MeshTag data has duplicates");
+#endif
   }
 
   /// Copy constructor
@@ -75,10 +77,26 @@ public:
   /// Move assignment
   MeshTags& operator=(MeshTags&& tags) = default;
 
-  /// Indices of tagged mesh entities, local-to-process (const version)
+  /// Find all entities with a given tag value
+  /// @param[in] value The value
+  /// @return Indices of tagged entities
+  const Eigen::Array<std::int32_t, Eigen::Dynamic, 1> find(const T value) const
+  {
+    int n = std::count(_values.begin(), _values.end(), value);
+    Eigen::Array<std::int32_t, Eigen::Dynamic, 1> indices(n);
+    int counter = 0;
+    for (std::int32_t i = 0; i < _values.size(); ++i)
+    {
+      if (_values[i] == value)
+        indices[counter++] = _indices[i];
+    }
+    return indices;
+  }
+
+  /// Indices of tagged mesh entities (local-to-process)
   const std::vector<std::int32_t>& indices() const { return _indices; }
 
-  /// Values attached to mesh entities (const.)
+  /// Values attached to mesh entities
   const std::vector<T>& values() const { return _values; }
 
   /// Return topological dimension of tagged entities
@@ -90,17 +108,17 @@ public:
   /// Name
   std::string name = "mesh_tags";
 
-  /// Unique ID
+  /// Unique ID of the object
   std::size_t id() const { return _unique_id; }
 
 private:
   // Unique identifier
   std::size_t _unique_id = common::UniqueIdGenerator::id();
 
-  /// Associated mesh
+  // Associated mesh
   std::shared_ptr<const Mesh> _mesh;
 
-  /// Topological dimension of tagged mesh entities
+  // Topological dimension of tagged mesh entities
   int _dim;
 
   // Local-to-process indices of tagged entities
@@ -108,261 +126,233 @@ private:
 
   // Values attached to entities
   std::vector<T> _values;
-
-  // Sort indices and values according by index
-  void sort()
-  {
-    // Compute the sorting permutation
-    std::vector<int> perm(_indices.size());
-    std::iota(perm.begin(), perm.end(), 0);
-    std::sort(perm.begin(), perm.end(),
-              [& indices = std::as_const(_indices)](const int a, const int b) {
-                return (indices[a] < indices[b]);
-              });
-
-    // Copy data
-    const std::vector<std::int32_t> indices_tmp = _indices;
-    const std::vector<T> values_tmp = _values;
-
-    // Apply sorting and insert
-    for (std::size_t i = 0; i < indices_tmp.size(); ++i)
-    {
-      _indices[i] = indices_tmp[perm[i]];
-      _values[i] = values_tmp[perm[i]];
-    }
-  }
-
-  // Remove duplicates in indices and values according to indices
-  void remove_duplicates()
-  {
-    // Algorithm would fail for empty vector
-    if (_indices.size() == 0)
-      return;
-
-    std::size_t last_unique = 0;
-    for (std::size_t i = 0; i < _indices.size(); ++i)
-    {
-      if (_indices[i] > _indices[last_unique])
-      {
-        _indices[++last_unique] = _indices[i];
-        _values[last_unique] = _values[i];
-      }
-    }
-    _indices.erase(_indices.begin() + last_unique + 1, _indices.end());
-    _values.erase(_values.begin() + last_unique + 1, _values.end());
-  }
 };
 
+/// @todo Generalise to create multiple MeshTags as some of the data sent
+/// (expensively) via MPI re-used.
+///
 /// Create MeshTags from arrays
-/// @param[in] comm
-/// @param[in] mesh
-/// @param[in] entity_cell_type Cell type of entities which MeshTags are
-///   tagging
-/// @param[in] topology Array describing topology of tagged mesh
-///   entities. This array must be using input_global_indices from the
-///   mesh.
-/// @param[in] values Array of values to attach to mesh entities
+/// @param[in] comm The MPI communicator
+/// @param[in] mesh The Mesh that the tags are associated with
+/// @param[in] tag_cell_type Cell type of entities which are being
+///   tagged
+/// @param[in] entities 'Node' indices (using the of entities
+///   input_global_indices from the Mesh) for vertices of for each
+///   entity that is tagged. The numbers of rows is equal to the number
+///   of entities.
+/// @param[in] values Tag values for each entity in @ entities. The
+///   length of @ values  must be equal to number of rows in @ entities.
 template <typename T>
 mesh::MeshTags<T>
 create_meshtags(MPI_Comm comm, const std::shared_ptr<const mesh::Mesh>& mesh,
-                const mesh::CellType& entity_cell_type,
+                const mesh::CellType& tag_cell_type,
                 const Eigen::Array<std::int64_t, Eigen::Dynamic, Eigen::Dynamic,
-                                   Eigen::RowMajor>& topology,
+                                   Eigen::RowMajor>& entities,
                 const std::vector<T>& values)
 {
-  if ((std::size_t)topology.rows() != values.size())
+  // NOTE: Not yet working for higher-order geometries
+  //
+  // TODO: Avoid expensive-to-create std::vector<std::vector>>. Build
+  //       AdjacencyList instead.
+
+  assert(mesh);
+  if ((std::size_t)entities.rows() != values.size())
     throw std::runtime_error("Number of entities and values must match");
 
-  // Copy topology array into flattened vector
-  std::vector<std::int64_t> topo_unique(
-      topology.data(), topology.data() + topology.rows() * topology.cols());
+  // Tagged entity topological dimension
+  const int e_dim = mesh::cell_dim(tag_cell_type);
 
-  std::sort(topo_unique.begin(), topo_unique.end());
-  topo_unique.erase(std::unique(topo_unique.begin(), topo_unique.end()),
-                    topo_unique.end());
+  // -------------------
+  // 1. Send this rank's global "input" nodes indices to the
+  //    'postmaster' rank, and receive global "input" nodes for which
+  //    this rank is the postmaster
 
-  const int e_dim = mesh::cell_dim(entity_cell_type);
-  const int dim = mesh->topology().dim();
-
-  auto e_to_v = mesh->topology().connectivity(e_dim, 0);
-  if (!e_to_v)
-    throw std::runtime_error("Mesh is missing entity-vertex connectivity.");
-
-  auto e_to_c = mesh->topology().connectivity(e_dim, dim);
-  if (!e_to_c)
-    throw std::runtime_error("Mesh is missing entity-cell connectivity.");
-
-  auto c_to_v = mesh->topology().connectivity(dim, 0);
-  if (!c_to_v)
-    throw std::runtime_error("Mesh is missing cell-vertex connectivity.");
-
-  const std::vector<std::int64_t>& igi
+  // Get "input" global node indices (as in the input file before any
+  // internal re-ordering)
+  const std::vector<std::int64_t>& nodes_g
       = mesh->geometry().input_global_indices();
 
-  // Send input global indices to process responsible for it, based on
-  // input global index value
-
-  const std::int64_t num_igi_global = MPI::sum(comm, (std::int64_t)igi.size());
-
-  // Split global array size and retrieve a range that this
-  // process/officer is responsible for
-  std::array<std::int64_t, 2> range = MPI::local_range(comm, num_igi_global);
-  const int local_size = range[1] - range[0];
-
+  // Send input global indices to 'post master' rank, based on input
+  // global index value
+  const std::int64_t num_nodes_g = mesh->geometry().index_map()->size_global();
   const int comm_size = MPI::size(comm);
-  std::vector<std::vector<std::int64_t>> send_igi(comm_size);
-  std::vector<std::vector<std::int64_t>> recv_igi(comm_size);
-
-  const std::int32_t size_local = mesh->geometry().index_map()->size_local()
-                                  + mesh->geometry().index_map()->num_ghosts();
-  assert((std::size_t)size_local == igi.size());
-  for (std::int32_t i = 0; i < size_local; ++i)
+  // NOTE: could make this int32_t be sending: index <- index - dest_rank_offset
+  std::vector<std::vector<std::int64_t>> nodes_g_send(comm_size);
+  for (std::int64_t node : nodes_g)
   {
-    // TODO: Optimise this call
-    // Figure out which process responsible for the input global index
-    const int officer = MPI::index_owner(comm_size, igi[i], num_igi_global);
-    send_igi[officer].push_back(igi[i]);
+    // TODO: Optimise this call by adding 'vectorised verion of
+    //       MPI::index_owner
+    // Figure out which process is the postmaster for the input global index
+    const std::int32_t p
+        = dolfinx::MPI::index_owner(comm_size, node, num_nodes_g);
+    nodes_g_send[p].push_back(node);
   }
 
-  MPI::all_to_all(comm, send_igi, recv_igi);
+  // Send/receive
+  const graph::AdjacencyList<std::int64_t> nodes_g_recv
+      = MPI::all_to_all(comm, graph::AdjacencyList<std::int64_t>(nodes_g_send));
 
-  // Handle received input global indices, i.e. put the owners of it to
-  // a global position, which is its value
+  // -------------------
+  // 2. Send the entity key (nodes list) and tag to the postmaster based
+  //    on the lowest index node in the entity 'key'
+  //
+  //    NOTE: Stage 2 doesn't depend on the data received in Step 1, so
+  //    data (i) the communication could be combined, or (ii) the
+  //    communication in Step 1 could be make non-blocking.
 
-  Eigen::Array<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> owners(
-      local_size, comm_size);
-  const std::size_t offset = MPI::global_offset(comm, local_size, true);
-
-  for (std::int32_t i = 0; i < comm_size; ++i)
+  std::vector<std::vector<std::int64_t>> entities_send(comm_size);
+  std::vector<std::vector<T>> values_send(comm_size);
+  std::vector<std::int64_t> entity(entities.cols());
+  for (std::int32_t e = 0; e < entities.rows(); ++e)
   {
-    const std::int32_t num_recv_igi = (std::int32_t)recv_igi[i].size();
-    for (std::int32_t j = 0; j < num_recv_igi; ++j)
+    // Copy nodes for entity and sort
+    std::copy(entities.row(e).data(), entities.row(e).data() + entities.cols(),
+              entity.begin());
+    std::sort(entity.begin(), entity.end());
+
+    // Determine postmaster based on lowest entity node
+    const std::int32_t p
+        = dolfinx::MPI::index_owner(comm_size, entity.front(), num_nodes_g);
+    entities_send[p].insert(entities_send[p].end(), entity.begin(),
+                            entity.end());
+    values_send[p].push_back(values[e]);
+  }
+
+  // TODO: Pack into one MPI call
+  const graph::AdjacencyList<std::int64_t> entities_recv = MPI::all_to_all(
+      comm, graph::AdjacencyList<std::int64_t>(entities_send));
+  const graph::AdjacencyList<T> values_recv
+      = MPI::all_to_all(comm, graph::AdjacencyList<T>(values_send));
+
+  // -------------------
+  // 3. As 'postmaster', send back the entity key (vertex list) and tag
+  //    value to ranks that possibly need the data. Do this based on the
+  //    first node index in the entity key.
+
+  // NOTE: Could: (i) use a std::unordered_multimap, or (ii) only send
+  // owned nodes to the postmaster and use map, unordered_map or
+  // std::vector<pair>>, followed by a neighbourhood all_to_all at the
+  // end.
+  //
+  // Build map from global node index to ranks that have the node
+  std::multimap<std::int64_t, int> node_to_rank;
+  for (int p = 0; p < nodes_g_recv.num_nodes(); ++p)
+  {
+    auto nodes = nodes_g_recv.links(p);
+    for (int i = 0; i < nodes.rows(); ++i)
+      node_to_rank.insert({nodes(i), p});
+  }
+
+  // Figure out which processes are owners of received nodes
+  std::vector<std::vector<std::int64_t>> send_nodes_owned(comm_size);
+  std::vector<std::vector<T>> send_vals_owned(comm_size);
+  const int nnodes_per_entity = entities.cols();
+  const Eigen::Map<const Eigen::Array<std::int64_t, Eigen::Dynamic,
+                                      Eigen::Dynamic, Eigen::RowMajor>>
+      _entities_recv(entities_recv.array().data(),
+                     entities_recv.array().rows() / nnodes_per_entity,
+                     nnodes_per_entity);
+  auto _values_recv = values_recv.array();
+  assert(_values_recv.rows() == _entities_recv.rows());
+  for (int e = 0; e < _entities_recv.rows(); ++e)
+  {
+    // Find ranks that have node0
+    auto [it0, it1] = node_to_rank.equal_range(_entities_recv(e, 0));
+    for (auto it = it0; it != it1; ++it)
     {
-      const std::int32_t local_index = recv_igi[i][j] - offset;
-      assert(local_size > local_index);
-      assert(local_index >= 0);
-      owners(local_index, i) = true;
+      const int p1 = it->second;
+      send_nodes_owned[p1].insert(
+          send_nodes_owned[p1].end(), _entities_recv.row(e).data(),
+          _entities_recv.row(e).data() + _entities_recv.cols());
+      send_vals_owned[p1].push_back(_values_recv(e));
     }
   }
 
-  // Distribute the owners of input global indices
+  // TODO: Pack into one MPI call
+  const graph::AdjacencyList<std::int64_t> recv_ents = MPI::all_to_all(
+      comm, graph::AdjacencyList<std::int64_t>(send_nodes_owned));
+  const graph::AdjacencyList<T> recv_vals
+      = MPI::all_to_all(comm, graph::AdjacencyList<T>(send_vals_owned));
 
-  // Distribute owners and fetch owners for the input global indices
-  // read from file, i.e. for the unique topology data in file
-  const Eigen::Array<bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-      dist_owners
-      = graph::Partitioning::distribute_data<bool>(comm, topo_unique, owners);
+  // -------------------
+  // 4. From the received (key, value) data, determine which keys
+  //    (entities) are on this process.
 
-  // Figure out which process needs input global indices read from file
-  // and send to it
+  // TODO: Rather than using std::map<std::vector<std::int64_t>,
+  //       std::int32_t>, use a rectangular Eigen::Array to avoid the
+  //       cost of std::vector<std::int64_t> allocations, and sort the
+  //       Array by row.
+  //
+  // TODO: We have already received possibly tagged entities from other
+  //       ranks, so we could use the received data to avoid creating
+  //       the std::map for *all* entities and just for candidate
+  //       entities.
 
-  // Mapping from global topology number to its ownership (bools saying
-  // if the process is owner)
-  std::unordered_map<std::int64_t, Eigen::Array<bool, Eigen::Dynamic, 1>>
-      topo_owners;
-  for (std::size_t i = 0; i < topo_unique.size(); ++i)
-    topo_owners[topo_unique[i]] = dist_owners.row(i);
-
-  std::vector<std::vector<std::int64_t>> send_ents(comm_size);
-  std::vector<std::vector<T>> send_vals(comm_size);
-  const int nnodes_per_entity = topology.cols();
-  for (Eigen::Index e = 0; e < topology.rows(); ++e)
+  // Build map from vertex index (local to rank) to global "user" node
+  // index
+  auto map_v = mesh->topology().index_map(0);
+  assert(map_v);
+  const std::int32_t num_vertices = map_v->size_local() + map_v->num_ghosts();
+  const graph::AdjacencyList<std::int32_t>& x_dofmap
+      = mesh->geometry().dofmap();
+  std::vector<std::int64_t> vertex_to_node(num_vertices);
+  auto c_to_v = mesh->topology().connectivity(mesh->topology().dim(), 0);
+  if (!c_to_v)
+    throw std::runtime_error("missing cell-vertex connectivity.");
+  for (int c = 0; c < c_to_v->num_nodes(); ++c)
   {
-    std::vector<std::int64_t> entity(nnodes_per_entity);
-    std::vector<bool> sent(comm_size, false);
-    for (int i = 0; i < nnodes_per_entity; ++i)
-      entity[i] = topology(e, i);
-
-    // Figure out owners of this entity. Entity has several nodes and
-    // each node can have up to comm_size owners, need to send the
-    // entity to each owner.
-    for (int i = 0; i < nnodes_per_entity; ++i)
-    {
-      for (int j = 0; j < comm_size; ++j)
-      {
-        if (topo_owners[entity[i]][j] && !sent[j])
-        {
-          send_ents[j].insert(send_ents[j].end(), entity.begin(), entity.end());
-          send_vals[j].push_back(values[e]);
-          sent[j] = true;
-        }
-      }
-    }
+    auto vertices = c_to_v->links(c);
+    auto x_dofs = x_dofmap.links(c);
+    for (int v = 0; v < vertices.rows(); ++v)
+      vertex_to_node[vertices[v]] = nodes_g[x_dofs[v]];
   }
 
-  std::vector<std::vector<T>> recv_vals(comm_size);
-  std::vector<std::vector<std::int64_t>> recv_ents(comm_size);
-  MPI::all_to_all(comm, send_ents, recv_ents);
-  MPI::all_to_all(comm, send_vals, recv_vals);
-
-  // Using just the information on current local mesh partition prepare
-  // a mapping from *ordered* nodes of entity input global indices to
-  // entity local index
-
-  std::map<std::vector<std::int64_t>, std::int32_t> entities_igi;
-  auto map_e = mesh->topology().index_map(e_dim);
-  assert(map_e);
-  const std::int32_t num_entities = map_e->size_local() + map_e->num_ghosts();
-  const graph::AdjacencyList<std::int32_t>& cells_g = mesh->geometry().dofmap();
-  const std::vector<std::uint8_t> vtk_perm
-      = io::cells::vtk_to_dolfin(entity_cell_type, nnodes_per_entity);
-  for (std::int32_t e = 0; e < num_entities; ++e)
+  // Build a map from entities on this process (keyed by vertex ordered
+  // entity input global indices) to entity local index
+  auto e_to_v = mesh->topology().connectivity(e_dim, 0);
+  if (!e_to_v)
+    throw std::runtime_error("Missing entity-vertex connectivity.");
+  std::map<std::vector<std::int64_t>, std::int32_t> entity_key_to_index;
+  std::vector<std::int64_t> key(nnodes_per_entity);
+  for (std::int32_t e = 0; e < e_to_v->num_nodes(); ++e)
   {
-    std::vector<std::int64_t> entity_igi(nnodes_per_entity);
-
-    // Iterate over all entities of the mesh. Find cell attached to the
-    // entity.
-    std::int32_t c = e_to_c->links(e)[0];
-    auto cell_nodes = cells_g.links(c);
-    auto cell_vertices = c_to_v->links(c);
-    auto entity_vertices = e_to_v->links(e);
-
-    for (int v = 0; v < entity_vertices.rows(); ++v)
-    {
-      // Find local index of vertex wrt. cell
-      const std::int32_t vertex = entity_vertices[vtk_perm[v]];
-      auto it = std::find(cell_vertices.data(),
-                          cell_vertices.data() + cell_vertices.rows(), vertex);
-      assert(it != (cell_vertices.data() + cell_vertices.rows()));
-      const int local_cell_vertex = std::distance(cell_vertices.data(), it);
-
-      // Insert input global index for the node of the entity
-      entity_igi[v] = igi[cell_nodes[local_cell_vertex]];
-    }
-
-    // Sorting is needed to match with entities stored in file
-    std::sort(entity_igi.begin(), entity_igi.end());
-    entities_igi.insert({entity_igi, e});
+    auto vertices = e_to_v->links(e);
+    for (int v = 0; v < vertices.rows(); ++v)
+      key[v] = vertex_to_node[vertices(v)];
+    std::sort(key.begin(), key.end());
+    entity_key_to_index.insert({key, e});
   }
 
-  // Iterate over all received entities and find it in entities of the
-  // mesh
-
-  // FIXME: Avoid creating std::vector<std::int64_t> the loop below
-
+  // Iterate over all received entities. If entity is on this rank,
+  // store (local entity index, tag value)
   std::vector<std::int32_t> indices_new;
   std::vector<T> values_new;
-  for (std::int32_t i = 0; i < comm_size; ++i)
+  const Eigen::Map<const Eigen::Array<std::int64_t, Eigen::Dynamic,
+                                      Eigen::Dynamic, Eigen::RowMajor>>
+      _entities(recv_ents.array().data(),
+                recv_ents.array().rows() / nnodes_per_entity,
+                nnodes_per_entity);
+  entity.resize(nnodes_per_entity);
+  for (Eigen::Index e = 0; e < _entities.rows(); ++e)
   {
-    const std::int32_t num_recv_ents
-        = (std::int32_t)(recv_ents[i].size() / nnodes_per_entity);
-    for (std::int32_t e = 0; e < num_recv_ents; ++e)
+    // Note: _entities.row(e) was sorted by the sender
+    std::copy(_entities.row(e).data(),
+              _entities.row(e).data() + nnodes_per_entity, entity.begin());
+    if (const auto it = entity_key_to_index.find(entity);
+        it != entity_key_to_index.end())
     {
-      std::vector<std::int64_t> _entity(&recv_ents[i][nnodes_per_entity * e],
-                                        &recv_ents[i][nnodes_per_entity * e]
-                                            + nnodes_per_entity);
-      std::sort(_entity.begin(), _entity.end());
-      const auto it = entities_igi.find(_entity);
-      if (it != entities_igi.end())
-      {
-        indices_new.push_back(it->second);
-        values_new.push_back(recv_vals[i][e]);
-      }
+      indices_new.push_back(it->second);
+      values_new.push_back(recv_vals.array()[e]);
     }
   }
 
-  return mesh::MeshTags<T>(mesh, e_dim, std::move(indices_new),
-                           std::move(values_new));
+  // -------------------
+  // 5. Build MeshTags object
+
+  auto [indices_sorted, values_sorted]
+      = common::sort_unique(indices_new, values_new);
+  return mesh::MeshTags<T>(mesh, e_dim, std::move(indices_sorted),
+                           std::move(values_sorted));
 }
 } // namespace mesh
 } // namespace dolfinx

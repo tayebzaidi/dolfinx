@@ -12,11 +12,12 @@ import pytest
 from petsc4py import PETSc
 
 import ufl
-from dolfinx import (MPI, DirichletBC, Function, FunctionSpace, fem, geometry,
+from dolfinx import (DirichletBC, Function, FunctionSpace, fem, geometry,
                      FacetNormal, CellDiameter, UnitSquareMesh, UnitCubeMesh,
                      Mesh)
 from dolfinx.fem import (apply_lifting, assemble_matrix, assemble_scalar,
                          assemble_vector, locate_dofs_topological, set_bc)
+from mpi4py import MPI
 from dolfinx.io import XDMFFile
 from dolfinx.cpp.mesh import CellType, GhostMode
 from dolfinx_utils.test.skips import skip_in_parallel
@@ -25,21 +26,21 @@ from ufl import (SpatialCoordinate, TestFunction, TrialFunction, div, dx, grad,
 
 
 def get_mesh(cell_type, datadir):
-    if MPI.size(MPI.comm_world) == 1:
+    if MPI.COMM_WORLD.size == 1:
         if cell_type == CellType.triangle:
-            return UnitSquareMesh(MPI.comm_world, 2, 1, cell_type)
+            return UnitSquareMesh(MPI.COMM_WORLD, 2, 1, cell_type)
         elif cell_type == CellType.quadrilateral:
             points = np.array([[0., 0.], [0.5, 0.], [1., 0.],
                                [0., .5], [0.5, .5], [1., .5],
                                [0., 1.], [0.5, 1.], [1., 1.]])
             cells = [[0, 1, 3, 4], [4, 1, 5, 2], [3, 4, 6, 7], [4, 5, 7, 8]]
-            mesh = Mesh(MPI.comm_world, cell_type, points, cells,
+            mesh = Mesh(MPI.COMM_WORLD, cell_type, points, cells,
                         [], GhostMode.none)
             mesh.geometry.coord_mapping = fem.create_coordinate_map(mesh)
             mesh.create_connectivity_all()
             return mesh
         else:
-            return UnitCubeMesh(MPI.comm_world, 2, 1, 1, cell_type)
+            return UnitCubeMesh(MPI.COMM_WORLD, 2, 1, 1, cell_type)
     else:
         if cell_type == CellType.triangle:
             filename = "UnitSquareMesh_triangle.xdmf"
@@ -49,7 +50,7 @@ def get_mesh(cell_type, datadir):
             filename = "UnitCubeMesh_tetra.xdmf"
         elif cell_type == CellType.hexahedron:
             filename = "UnitCubeMesh_hexahedron.xdmf"
-        with XDMFFile(MPI.comm_world, os.path.join(datadir, filename), "r", encoding=XDMFFile.Encoding.ASCII) as xdmf:
+        with XDMFFile(MPI.COMM_WORLD, os.path.join(datadir, filename), "r", encoding=XDMFFile.Encoding.ASCII) as xdmf:
             return xdmf.read_mesh(name="Grid")
 
 
@@ -98,7 +99,7 @@ def run_scalar_test(mesh, V, degree):
     u_bc.interpolate(lambda x: x[1] ** degree)
 
     # Create Dirichlet boundary condition
-    mesh.create_connectivity_all()
+    mesh.topology.create_connectivity_all()
     facetdim = mesh.topology.dim - 1
     bndry_facets = np.where(np.array(
         mesh.topology.on_boundary(facetdim)) == 1)[0]
@@ -126,7 +127,7 @@ def run_scalar_test(mesh, V, degree):
     print("Matrix assembly time:", t1 - t0)
 
     # Create LU linear solver
-    solver = PETSc.KSP().create(MPI.comm_world)
+    solver = PETSc.KSP().create(MPI.COMM_WORLD)
     solver.setType(PETSc.KSP.Type.PREONLY)
     solver.getPC().setType(PETSc.PC.Type.LU)
     solver.setOperators(A)
@@ -146,8 +147,8 @@ def run_scalar_test(mesh, V, degree):
     print("Error functional compile time:", t1 - t0)
 
     t0 = time.time()
-    error = assemble_scalar(M)
-    error = MPI.sum(mesh.mpi_comm(), error)
+    error = mesh.mpi_comm().allreduce(assemble_scalar(M), op=MPI.SUM)
+
     t1 = time.time()
 
     print("Error assembly time:", t1 - t0)
@@ -173,7 +174,7 @@ def run_vector_test(mesh, V, degree):
     # Create LU linear solver (Note: need to use a solver that
     # re-orders to handle pivots, e.g. not the PETSc built-in LU
     # solver)
-    solver = PETSc.KSP().create(MPI.comm_world)
+    solver = PETSc.KSP().create(MPI.COMM_WORLD)
     solver.setType("preonly")
     solver.getPC().setType('lu')
     solver.setOperators(A)
@@ -199,7 +200,6 @@ def run_vector_test(mesh, V, degree):
 def run_dg_test(mesh, V, degree):
     """ Manufactured Poisson problem, solving u = x[component]**n, where n is the
     degree of the Lagrange function space.
-
     """
     u, v = TrialFunction(V), TestFunction(V)
 
@@ -248,10 +248,12 @@ def run_dg_test(mesh, V, degree):
     A = assemble_matrix(a, [])
     A.assemble()
 
-    # Create LU linear solver
-    solver = PETSc.KSP().create(MPI.comm_world)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
+    # Create LU linear solver (Note: need to use a solver that
+    # re-orders to handle pivots, e.g. not the PETSc built-in LU
+    # solver)
+    solver = PETSc.KSP().create(MPI.COMM_WORLD)
+    solver.setType("preonly")
+    solver.getPC().setType('lu')
     solver.setOperators(A)
 
     # Solve
