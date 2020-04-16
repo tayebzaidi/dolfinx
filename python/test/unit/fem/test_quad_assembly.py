@@ -9,11 +9,11 @@ import os
 import numpy as np
 import pytest
 
-from dolfinx import FunctionSpace, fem, UnitSquareMesh, UnitCubeMesh, Mesh
+from dolfinx import FunctionSpace, UnitSquareMesh, UnitCubeMesh, Mesh
 from dolfinx.fem import assemble_vector
 from mpi4py import MPI
 from dolfinx.io import XDMFFile
-from dolfinx.cpp.mesh import CellType, GhostMode
+from dolfinx.cpp.mesh import CellType
 from ufl import TestFunction, div, dx
 
 
