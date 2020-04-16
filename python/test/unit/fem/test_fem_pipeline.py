@@ -82,7 +82,7 @@ def run_scalar_test(mesh, V, degree):
 
     # Source term
     x = SpatialCoordinate(mesh)
-    u_exact = x[1] ** degree
+    u_exact = x[1]**degree
     f = - div(grad(u_exact))
 
     # Set quadrature degree for linear form integrand (ignores effect of
@@ -96,7 +96,7 @@ def run_scalar_test(mesh, V, degree):
     print("Linear form compile time:", t1 - t0)
 
     u_bc = Function(V)
-    u_bc.interpolate(lambda x: x[1] ** degree)
+    u_bc.interpolate(lambda x: x[1]**degree)
 
     # Create Dirichlet boundary condition
     mesh.topology.create_connectivity_all()
@@ -140,7 +140,7 @@ def run_scalar_test(mesh, V, degree):
     t1 = time.time()
     print("Linear solver time:", t1 - t0)
 
-    M = (u_exact - uh) ** 2 * dx
+    M = (u_exact - uh)**2 * dx
     t0 = time.time()
     M = fem.Form(M)
     t1 = time.time()
@@ -248,12 +248,10 @@ def run_dg_test(mesh, V, degree):
     A = assemble_matrix(a, [])
     A.assemble()
 
-    # Create LU linear solver (Note: need to use a solver that
-    # re-orders to handle pivots, e.g. not the PETSc built-in LU
-    # solver)
+    # Create LU linear solver
     solver = PETSc.KSP().create(MPI.COMM_WORLD)
-    solver.setType("preonly")
-    solver.getPC().setType('lu')
+    solver.setType(PETSc.KSP.Type.PREONLY)
+    solver.getPC().setType(PETSc.PC.Type.LU)
     solver.setOperators(A)
 
     # Solve
@@ -261,10 +259,7 @@ def run_dg_test(mesh, V, degree):
     solver.solve(b, uh.vector)
     uh.vector.ghostUpdate(addv=PETSc.InsertMode.INSERT,
                           mode=PETSc.ScatterMode.FORWARD)
-
-    error = assemble_scalar((u_exact - uh) ** 2 * dx)
-    error = MPI.sum(mesh.mpi_comm(), error)
-
+    error = mesh.mpi_comm().allreduce(assemble_scalar((u_exact - uh)**2 * dx), op=MPI.SUM)
     assert np.absolute(error) < 1.0e-14
 
 
