@@ -1,4 +1,4 @@
-# Copyright (C) 2019 Jorgen Dokken and Garth N. Wells
+# Copyright (C) 2020 Joseph Dean, Jorgen Dokken, Matthew Scroggs, Garth N. Wells
 #
 # This file is part of DOLFINX (https://www.fenicsproject.org)
 #
