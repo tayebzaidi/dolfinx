@@ -1,4 +1,4 @@
-# Copyright (C) 2019 Jorgen Dokken and Garth N. Wells
+# Copyright (C) 2019 Jorgen Dokken, Matthew Scroggs and Garth N. Wells
 #
 # This file is part of DOLFINX (https://www.fenicsproject.org)
 #
@@ -19,7 +19,7 @@ from dolfinx.fem import (apply_lifting, assemble_matrix, assemble_scalar,
                          assemble_vector, locate_dofs_topological, set_bc)
 from mpi4py import MPI
 from dolfinx.io import XDMFFile
-from dolfinx.cpp.mesh import CellType, GhostMode
+from dolfinx.cpp.mesh import CellType
 from dolfinx_utils.test.skips import skip_in_parallel
 from ufl import (SpatialCoordinate, TestFunction, TrialFunction, div, dx, grad,
                  inner, ds, dS, avg, jump)
@@ -34,10 +34,8 @@ def get_mesh(cell_type, datadir):
                                [0., .5], [0.5, .5], [1., .5],
                                [0., 1.], [0.5, 1.], [1., 1.]])
             cells = [[0, 1, 3, 4], [4, 1, 5, 2], [3, 4, 6, 7], [4, 5, 7, 8]]
-            mesh = Mesh(MPI.COMM_WORLD, cell_type, points, cells,
-                        [], GhostMode.none)
-            mesh.geometry.coord_mapping = fem.create_coordinate_map(mesh)
-            mesh.create_connectivity_all()
+            mesh = Mesh(MPI.COMM_WORLD, cell_type, points, cells, [])
+            mesh.topology.create_connectivity_all()
             return mesh
         else:
             return UnitCubeMesh(MPI.COMM_WORLD, 2, 1, 1, cell_type)
