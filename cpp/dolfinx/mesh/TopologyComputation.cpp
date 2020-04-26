@@ -115,6 +115,7 @@ get_local_indexing(
           = cell_indexmap->size_local() + cell_indexmap->num_ghosts();
       assert(entity_list.rows() % cell_count == 0);
       std::int32_t num_entities_per_cell = entity_list.rows() / cell_count;
+
       std::int32_t ghost_offset
           = cell_indexmap->size_local() * num_entities_per_cell;
 
@@ -124,6 +125,7 @@ get_local_indexing(
         const std::int32_t idx = entity_index[i];
         ghost_status[idx] = 1;
       }
+
       // Set entities in ghost cells to 2 (purely ghost) or 3 (border)
       for (int i = ghost_offset; i < entity_list.rows(); ++i)
       {
@@ -440,7 +442,7 @@ compute_entities_by_key_matching(
       = sort_by_perm<std::int32_t>(entity_list_sorted);
 
   std::vector<std::int32_t> entity_index(entity_list.rows());
-  std::int32_t entity_count = 0;
+  std::int32_t num_entities = 0;
 
   // Sort the list and label uniquely
   std::int32_t last = sort_order[0];
@@ -449,11 +451,11 @@ compute_entities_by_key_matching(
   {
     std::int32_t j = sort_order[i];
     if ((entity_list_sorted.row(j) != entity_list_sorted.row(last)).any())
-      ++entity_count;
-    entity_index[j] = entity_count;
+      ++num_entities;
+    entity_index[j] = num_entities;
     last = j;
   }
-  ++entity_count;
+  ++num_entities;
 
   // Communicate with other processes to find out which entities are
   // ghosted and shared. Remap the numbering so that ghosts are at the
@@ -471,7 +473,7 @@ compute_entities_by_key_matching(
 
   // Entity-vertex connectivity
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-      connectivity_ev(entity_count, num_vertices_per_entity);
+      connectivity_ev(num_entities, num_vertices_per_entity);
   for (int i = 0; i < entity_list.rows(); ++i)
     connectivity_ev.row(local_index[i]) = entity_list.row(i);
 
