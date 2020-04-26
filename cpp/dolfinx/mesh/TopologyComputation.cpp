@@ -85,28 +85,27 @@ get_local_indexing(
 {
   // Get first occurrence in entity list of each entity
   std::vector<std::int32_t> unique_row(entity_list.rows(), -1);
-  std::int32_t num_entities = 0;
+  std::int32_t entity_count = 0;
   for (int i = 0; i < entity_list.rows(); ++i)
   {
     const std::int32_t idx = entity_index[i];
     if (unique_row[idx] == -1)
     {
       unique_row[idx] = i;
-      ++num_entities;
+      ++entity_count;
     }
   }
-  unique_row.resize(num_entities);
+  unique_row.resize(entity_count);
 
   //---------
   // FIXME: Use enum for ghost key
 
   // Set ghost status array values
-  // 1: entities that are only in local cells (i.e. are owned)
+  // 1: entities that are only in owned cells (i.e. are owned)
   // 2: entities that are only in ghost cells (i.e. are not owned)
   // 3: entities with ownership that needs deciding (used also for
   //    un-ghosted case)
-
-  std::vector<std::int8_t> ghost_status(num_entities, 0);
+  std::vector<std::int8_t> ghost_status(entity_count, 0);
   {
     if (cell_indexmap->num_ghosts() == 0)
       std::fill(ghost_status.begin(), ghost_status.end(), 3);
@@ -125,7 +124,6 @@ get_local_indexing(
         const std::int32_t idx = entity_index[i];
         ghost_status[idx] = 1;
       }
-
       // Set entities in ghost cells to 2 (purely ghost) or 3 (border)
       for (int i = ghost_offset; i < entity_list.rows(); ++i)
       {
@@ -194,6 +192,7 @@ get_local_indexing(
         auto it = proc_to_neighbour.find(p);
         assert(it != proc_to_neighbour.end());
         const int np = it->second;
+
         vlocal.assign(entity_list.row(i).data(),
                       entity_list.row(i).data() + num_vertices);
         vglobal = vertex_indexmap->local_to_global(vlocal, false);
@@ -244,6 +243,7 @@ get_local_indexing(
   for (int np = 0; np < neighbour_size; ++np)
   {
     const int p = neighbours[np];
+
     for (int j = recv_offsets[np]; j < recv_offsets[np + 1]; j += num_vertices)
     {
       recv_vec.assign(recv_entities_data.data() + j,
@@ -262,18 +262,17 @@ get_local_indexing(
 
   //---------
   // Determine ownership
-  std::vector<std::int32_t> local_index(num_entities, -1);
+  std::vector<std::int32_t> local_index(entity_count, -1);
   std::int32_t num_local;
   {
     int mpi_rank = dolfinx::MPI::rank(comm);
     std::int32_t c = 0;
     // Index non-ghost entities
-    for (int i = 0; i < num_entities; ++i)
+    for (int i = 0; i < entity_count; ++i)
     {
       const auto it = shared_entities.find(i);
       std::int8_t gs = ghost_status[i];
       assert(gs > 0);
-
       // Definitely ghost
       if (gs == 2)
         continue;
@@ -295,7 +294,7 @@ get_local_indexing(
     }
     num_local = c;
 
-    for (int i = 0; i < num_entities; ++i)
+    for (int i = 0; i < entity_count; ++i)
     {
       // Unmapped global index (ghost)
       if (local_index[i] == -1)
@@ -304,12 +303,12 @@ get_local_indexing(
         ++c;
       }
     }
-    assert(c == num_entities);
+    assert(c == entity_count);
   }
 
   //---------
   // Communicate global indices to other processes
-  std::vector<std::int64_t> ghost_indices(num_entities - num_local, -1);
+  std::vector<std::int64_t> ghost_indices(entity_count - num_local, -1);
   {
     const std::int64_t local_offset
         = dolfinx::MPI::global_offset(comm, num_local, true);
@@ -328,6 +327,7 @@ get_local_indexing(
         std::int64_t gi = (local_index[index] < num_local)
                               ? (local_offset + local_index[index])
                               : -1;
+
         send_global_index_data.push_back(gi);
       }
 
@@ -338,6 +338,7 @@ get_local_indexing(
         = dolfinx::MPI::neighbor_all_to_all(
               neighbour_comm, send_global_index_offsets, send_global_index_data)
               .array();
+
     assert(recv_global_index_data.size() == (int)recv_index.size());
 
     // Map back received indices
@@ -396,37 +397,36 @@ compute_entities_by_key_matching(
   // Start timer
   common::Timer timer("Compute entities of dim = " + std::to_string(dim));
 
-  // Gte numnbr of entities and vertices per cell
+  // Initialize local array of entities
   const std::int8_t num_entities_per_cell
       = mesh::cell_num_entities(cell_type, dim);
   const int num_vertices_per_entity
       = mesh::num_cell_vertices(mesh::cell_entity_type(cell_type, dim));
 
-  // Map entity vertex indices to cell vertex indices
+  // Create map from cell vertices to entity vertices
   Eigen::Array<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> e_vertices
       = mesh::get_entity_vertices(cell_type, dim);
 
-  // Number of cells on this process
-  const std::int32_t num_cells = cells.num_nodes();
+  const int num_cells = cells.num_nodes();
 
-  // Build list of vertices for each entity, for each cell
+  // List of vertices for each entity in each cell
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list(num_cells * num_entities_per_cell, num_vertices_per_entity);
   for (int c = 0; c < num_cells; ++c)
   {
-    // Get vertices for the cell
+    // Get vertices from cell
     auto vertices = cells.links(c);
 
-    // Iterate over all entities of cell
+    // Iterate over entities of cell
     for (int i = 0; i < num_entities_per_cell; ++i)
     {
-      // Get entity vertices
+      auto entity = entity_list.row(c * num_entities_per_cell + i);
       for (int j = 0; j < num_vertices_per_entity; ++j)
-        entity_list(c * i, j) = vertices[e_vertices(i, j)];
+        entity(j) = vertices[e_vertices(i, j)];
     }
   }
 
-  // Copy list and sort vertices of each entity
+  // Copy list and sort vertices of each entity into order
   Eigen::Array<std::int32_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
       entity_list_sorted = entity_list;
   for (int i = 0; i < entity_list_sorted.rows(); ++i)
@@ -435,7 +435,7 @@ compute_entities_by_key_matching(
               entity_list_sorted.row(i).data() + num_vertices_per_entity);
   }
 
-  // Sort the list of ordered entities
+  // Compute sort permutation for entity list (with ordered vertices)
   const std::vector<std::int32_t> sort_order
       = sort_by_perm<std::int32_t>(entity_list_sorted);
 
