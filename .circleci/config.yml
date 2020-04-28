@@ -153,7 +153,6 @@ jobs:
       - run: *build-python-interface
       - run: *build-documentation-python
 
-      - run: *unit-tests-python
       - run: *unit-tests-python-mpi
       - run: *demos-python
       - run: *demos-python-mpi
