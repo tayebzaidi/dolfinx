@@ -232,9 +232,9 @@ def assemble_matrix_cffi(A, mesh, dofmap, set_vals, mode):
         A_local[:] = 0.0
         for j in range(q.shape[0]):
             N[0], N[1], N[2] = 1.0 - q[j, 0] - q[j, 1], q[j, 0], q[j, 1]
-            for k in range(3):
-                for l in range(3):
-                    A_local[k, l] += weights[j] * cell_area * N[k] * N[l]
+            for row in range(3):
+                for col in range(3):
+                    A_local[row, col] += weights[j] * cell_area * N[row] * N[col]
 
         # Add to global tensor
         pos = dofmap[3 * i:3 * i + 3]
@@ -262,9 +262,9 @@ def assemble_matrix_ctypes(A, mesh, dofmap, set_vals, mode):
         A_local[:] = 0.0
         for j in range(q.shape[0]):
             N[0], N[1], N[2] = 1.0 - q[j, 0] - q[j, 1], q[j, 0], q[j, 1]
-            for k in range(3):
-                for l in range(3):
-                    A_local[k, l] += weights[j] * cell_area * N[k] * N[l]
+            for row in range(3):
+                for col in range(3):
+                    A_local[row, col] += weights[j] * cell_area * N[row] * N[col]
 
         rows = cols = dofmap[3 * i:3 * i + 3]
         set_vals(A, 3, rows.ctypes, 3, cols.ctypes, A_local.ctypes, mode)
@@ -277,7 +277,8 @@ def test_custom_mesh_loop_rank1():
     V = dolfinx.FunctionSpace(mesh, ("Lagrange", 1))
 
     # Unpack mesh and dofmap data
-    pos = mesh.geometry.dofmap.offsets()
+    num_cells = mesh.topology.index_map(mesh.topology.dim).size_local
+    pos = mesh.geometry.dofmap.offsets()[:num_cells + 1]
     x_dofs = mesh.geometry.dofmap.array()
     x = mesh.geometry.x
     dofs = V.dofmap.list.array()
@@ -338,7 +339,8 @@ def test_custom_mesh_loop_ctypes_rank2():
     V = dolfinx.FunctionSpace(mesh, ("Lagrange", 1))
 
     # Extract mesh and dofmap data
-    pos = mesh.geometry.dofmap.offsets()
+    num_cells = mesh.topology.index_map(mesh.topology.dim).size_local
+    pos = mesh.geometry.dofmap.offsets()[:num_cells + 1]
     x_dofs = mesh.geometry.dofmap.array()
     x = mesh.geometry.x
     dofs = np.array(V.dofmap.list.array(), dtype=np.dtype(PETSc.IntType))
@@ -391,7 +393,8 @@ def test_custom_mesh_loop_cffi_rank2(set_vals):
     A0.assemble()
 
     # Unpack mesh and dofmap data
-    pos = mesh.geometry.dofmap.offsets()
+    num_cells = mesh.topology.index_map(mesh.topology.dim).size_local
+    pos = mesh.geometry.dofmap.offsets()[:num_cells + 1]
     x_dofs = mesh.geometry.dofmap.array()
     x = mesh.geometry.x
     dofs = np.array(V.dofmap.list.array(), dtype=np.dtype(PETSc.IntType))

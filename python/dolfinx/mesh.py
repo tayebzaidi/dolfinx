@@ -7,15 +7,13 @@
 import types
 
 import numpy
-
 import ufl
 from dolfinx import cpp, fem
 
 
-def locate_entities_geometrical(mesh: cpp.mesh.Mesh,
-                                dim: int,
-                                marker: types.FunctionType,
-                                boundary_only: bool = False):
+def locate_entities(mesh: cpp.mesh.Mesh,
+                    dim: int,
+                    marker: types.FunctionType):
     """Compute list of mesh entities satisfying a geometric marking function.
 
     Parameters
@@ -26,9 +24,8 @@ def locate_entities_geometrical(mesh: cpp.mesh.Mesh,
         The topological dimension of the mesh entities to consider
     marker
         A function that takes an array of points `x` with shape
-        ``(gdim, num_points)`` and returns an array of booleans of
-        length ``num_points``, evaluating to `True` for entities whose
-        degree-of-freedom should be returned.
+        ``(gdim, num_points)`` and returns an array of booleans of length
+        ``num_points``, evaluating to `True` for entities to be located.
 
     Returns
     -------
@@ -37,7 +34,43 @@ def locate_entities_geometrical(mesh: cpp.mesh.Mesh,
 
     """
 
-    return cpp.mesh.locate_entities_geometrical(mesh, dim, marker, boundary_only)
+    return cpp.mesh.locate_entities(mesh, dim, marker)
+
+
+def locate_entities_boundary(mesh: cpp.mesh.Mesh,
+                             dim: int,
+                             marker: types.FunctionType):
+    """Compute list of mesh entities that are attached to an owned boundary facet
+    and satisfy a geometric marking function.
+
+    For vertices and edges, in parallel this function will not necessarily
+    mark all entities that are on the exterior boundary. For example, it is
+    possible for a process to have a vertex that lies on the boundary without
+    any of the attached facets being a boundary facet. When used to find
+    degrees-of-freedom, e.g. using fem.locate_dofs_topological, the function
+    that uses the data returned by this function must typically perform some
+    parallel communication.
+
+    Parameters
+    ----------
+    mesh
+        The mesh
+    dim
+        The topological dimension of the mesh entities to
+        consider
+    marker
+        A function that takes an array of points `x` with shape
+        ``(gdim, num_points)`` and returns an array of booleans of length
+        ``num_points``, evaluating to `True` for entities to be located.
+
+    Returns
+    -------
+    numpy.ndarray
+        Indices (local to the process) of marked mesh entities.
+
+    """
+
+    return cpp.mesh.locate_entities_boundary(mesh, dim, marker)
 
 
 _meshtags_types = {
@@ -58,16 +91,29 @@ def refine(mesh, cell_markers=None, redistribute=True):
     return mesh_refined
 
 
-def Mesh(comm, cell_type, x, cells, ghosts, degree=1, ghost_mode=cpp.mesh.GhostMode.none):
-    """Crete a mesh from topology and geometry data"""
-    cell = ufl.Cell(cpp.mesh.to_string(cell_type), geometric_dimension=x.shape[1])
-    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, degree))
+def create(comm, cells, x, domain, ghost_mode=cpp.mesh.GhostMode.shared_facet):
+    """Create a mesh from topology and geometry data"""
     cmap = fem.create_coordinate_map(domain)
+    try:
+        mesh = cpp.mesh.create(comm, cells, cmap, x, ghost_mode)
+    except TypeError:
+        mesh = cpp.mesh.create(comm, cpp.graph.AdjacencyList64(numpy.cast['int64'](cells)),
+                               cmap, x, ghost_mode)
 
-    mesh = cpp.mesh.Mesh(comm, cell_type, x, cells, cmap, ghosts, ghost_mode)
+    # Attach UFL data (used when passing a mesh into UFL functions)
     domain._ufl_cargo = mesh
     mesh._ufl_domain = domain
     return mesh
+
+
+def Mesh(comm, cell_type, x, cells, ghosts, degree=1, ghost_mode=cpp.mesh.GhostMode.none):
+    """Create a mesh from topology and geometry data
+
+    Note: this function is deprecated in favour of mesh.create
+    """
+    cell = ufl.Cell(cpp.mesh.to_string(cell_type), geometric_dimension=x.shape[1])
+    domain = ufl.Mesh(ufl.VectorElement("Lagrange", cell, degree))
+    return create(comm, cells, x, domain, ghost_mode)
 
 
 def MeshTags(mesh, dim, indices, values):
