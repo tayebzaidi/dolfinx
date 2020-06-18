@@ -115,8 +115,10 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
 #   documentation or run tests.
 # - Third set of packages are optional but required for
 #   pygmsh/meshio/DOLFINX mesh pipeline.
-RUN pip3 install --no-cache-dir mpi4py numba && \
-    pip3 install --no-cache-dir cffi cppimport flake8 pytest pytest-xdist sphinx sphinx_rtd_theme && \
+RUN apt-get update -qq && \
+    apt-get install -y python3-mpi4py python3-numba
+
+RUN pip3 install --no-cache-dir cffi cppimport flake8 pytest pytest-xdist sphinx sphinx_rtd_theme && \
     export HDF5_MPI="ON" && \
     pip3 install --no-cache-dir --no-binary=h5py h5py meshio pygmsh
 
@@ -166,6 +168,7 @@ RUN apt-get -qq update && \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
     --with-shared-libraries \
+    --with-pic=1 \
     --download-blacs \
     --download-hypre \
     --download-metis \
@@ -186,6 +189,7 @@ RUN apt-get -qq update && \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
     --with-shared-libraries \
+    --with-pic=1 \
     --download-blacs \
     --download-metis \
     --download-mumps \
