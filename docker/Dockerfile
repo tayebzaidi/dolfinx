@@ -167,7 +167,7 @@ RUN apt-get -qq update && \
     --FOPTFLAGS=${PETSC_SLEPC_OPTFLAGS} \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
-    --with-shared-libraries=0 \
+    --with-shared-libraries \
     --download-blacs \
     --download-hypre \
     --download-metis \
@@ -178,6 +178,7 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
+    --CFLAGS=-fPIC \
     --with-scalar-type=real && \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-real-32 ${MAKEFLAGS} all && \
     python3 ./configure \
@@ -187,7 +188,7 @@ RUN apt-get -qq update && \
     --FOPTFLAGS=${PETSC_SLEPC_OPTFLAGS} \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
-    --with-shared-libraries=0 \
+    --with-shared-libraries \
     --download-blacs \
     --download-metis \
     --download-mumps \
@@ -196,6 +197,7 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
+    --CFLAGS=-fPIC \
     --with-scalar-type=complex && \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-complex-32 ${MAKEFLAGS} all && \
     apt-get -y purge bison flex && \
