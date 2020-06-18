@@ -167,8 +167,7 @@ RUN apt-get -qq update && \
     --FOPTFLAGS=${PETSC_SLEPC_OPTFLAGS} \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
-    --with-shared-libraries \
-    --with-pic=1 \
+    --with-shared-libraries=0 \
     --download-blacs \
     --download-hypre \
     --download-metis \
@@ -179,12 +178,7 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
-    --with-scalar-type=real 
-
-ENV PETSC_DIR=/usr/local/petsc SLEPC_DIR=/usr/local/slepc
-ENV MAKEFLAGS="CPPFLAGS='-fPIC'"
-WORKDIR /tmp
-RUN cd ${PETSC_DIR} && \
+    --with-scalar-type=real && \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-real-32 ${MAKEFLAGS} all && \
     python3 ./configure \
     PETSC_ARCH=linux-gnu-complex-32 \
@@ -193,8 +187,7 @@ RUN cd ${PETSC_DIR} && \
     --FOPTFLAGS=${PETSC_SLEPC_OPTFLAGS} \
     --with-debugging=${PETSC_SLEPC_DEBUGGING} \
     --with-fortran-bindings=no \
-    --with-shared-libraries \
-    --with-pic=1 \
+    --with-shared-libraries=0 \
     --download-blacs \
     --download-metis \
     --download-mumps \
