@@ -31,7 +31,7 @@ ARG SLEPC4PY_VERSION=3.13.0
 ARG KAHIP_VERSION=14be06c
 
 ARG MAKEFLAGS
-ARG PETSC_SLEPC_OPTFLAGS="-02 -g"
+ARG PETSC_SLEPC_OPTFLAGS="-fPIC -O2 -g"
 ARG PETSC_SLEPC_DEBUGGING="yes"
 
 ########################################
@@ -178,8 +178,7 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
-    --CFLAGS=-fPIC \
-    --with-scalar-type=real && \
+    --with-scalar-type=real \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-real-32 ${MAKEFLAGS} all && \
     python3 ./configure \
     PETSC_ARCH=linux-gnu-complex-32 \
@@ -197,7 +196,6 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
-    --CFLAGS=-fPIC \
     --with-scalar-type=complex && \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-complex-32 ${MAKEFLAGS} all && \
     apt-get -y purge bison flex && \
