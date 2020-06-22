@@ -178,7 +178,7 @@ RUN apt-get -qq update && \
     --download-suitesparse \
     --download-superlu \
     --download-superlu_dist \
-    --with-scalar-type=real \
+    --with-scalar-type=real && \
     make PETSC_DIR=/usr/local/petsc PETSC_ARCH=linux-gnu-real-32 ${MAKEFLAGS} all && \
     python3 ./configure \
     PETSC_ARCH=linux-gnu-complex-32 \
